@@ -18,3 +18,11 @@ pub fn fixed_line(input: &str) -> String {
     }
     out
 }
+/// Codex measures these three logical rows against the displayed pane's cell width.
+pub fn footer(first: &str, middle: Vec<serde_json::Value>, last: &str) -> serde_json::Value {
+    use serde_json::json;
+    let mut children = vec![json!(fixed_line(first)), json!("\n")];
+    children.extend(middle);
+    children.extend([json!("\n"), json!(fixed_line(last))]);
+    json!({"type":"text","children":children})
+}
