@@ -160,3 +160,45 @@ fn distinct_shell_launches_and_terminal_interactions_are_counted_separately() {
         );
     }
 }
+#[test]
+fn a_batch_counts_the_individual_requests_even_before_their_completions_arrive() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("batch.jsonl");
+    let mut f = fs::File::create(&path).unwrap();
+    let mut history = History::default();
+    let mut append = |value: serde_json::Value| writeln!(f, "{value}").unwrap();
+    append(
+        json!({"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"batch"}}),
+    );
+    let lifecycle = |when: &str, id: &str, status: &str| json!({"type":"event_msg","payload":{"type":when,"item":{"type":"CommandExecution","source":"unified_exec_startup","id":id,"process_id":"same","status":status}}});
+    for id in ["c1", "c2", "c3"] {
+        append(lifecycle("item_started", id, "in_progress"));
+    }
+    assert_eq!(
+        history.read(&path).unwrap().tools_label().as_deref(),
+        Some("Tools 3 · Shell 3")
+    );
+    for id in ["c3", "c1", "c2", "c2"] {
+        append(lifecycle(
+            "item_completed",
+            id,
+            if id == "c2" { "failed" } else { "completed" },
+        ));
+    }
+    append(
+        json!({"type":"response_item","payload":{"type":"function_call","namespace":"mcp__example","name":"read","call_id":"m1"}}),
+    );
+    append(
+        json!({"type":"event_msg","payload":{"type":"item_completed","item":{"type":"McpToolCall","id":"m1","result":{"isError":true}}}}),
+    );
+    append(
+        json!({"type":"response_item","payload":{"type":"function_call","name":"update_plan","call_id":"p1","arguments":"{}"}}),
+    );
+    append(
+        json!({"type":"response_item","payload":{"type":"function_call","name":"wait","call_id":"parent-poll"}}),
+    );
+    assert_eq!(
+        history.read(&path).unwrap().tools_label().as_deref(),
+        Some("Tools 5 · Shell 3 · MCP 1 · Other 1 · Failed 2")
+    );
+}

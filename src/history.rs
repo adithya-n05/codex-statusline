@@ -49,7 +49,7 @@ struct Cursor {
     offset: u64,
     metrics: Metrics,
     turns: crate::speed::Turns,
-    seen: std::collections::HashSet<String>,
+    seen: std::collections::HashMap<String, bool>,
 }
 #[derive(Default)]
 pub struct History {
@@ -116,12 +116,7 @@ impl History {
             cursor.offset += read as u64;
             if let Ok(value) = serde_json::from_slice(&record) {
                 let event: &Value = &value;
-                if event["type"] == "event_msg" && event["payload"]["type"] == "item_completed" {
-                    cursor
-                        .metrics
-                        .activity
-                        .record(&event["payload"]["item"], &mut cursor.seen);
-                }
+                cursor.metrics.activity.observe(event, &mut cursor.seen);
                 if event["type"] == "event_msg" {
                     cursor.turns.observe(event, &mut cursor.metrics.speed);
                 }
