@@ -42,3 +42,20 @@ fn stdio_handshake_survives_bad_input_and_ignores_notifications() {
     assert_eq!(replies[3], json!({"jsonrpc":"2.0","id":2,"result":{}}));
     assert_eq!(replies[4]["error"]["code"], -32601);
 }
+#[test]
+fn inventory_advertises_one_matching_statusline_resource() {
+    let replies = exchange(&[
+        r#"{"id":1,"method":"tools/list"}"#,
+        r#"{"id":2,"method":"resources/list"}"#,
+        r#"{"id":3,"method":"resources/templates/list"}"#,
+    ]);
+    let tools = replies[0]["result"]["tools"].as_array().unwrap();
+    assert_eq!(tools.len(), 1);
+    let entry = &tools[0]["_meta"]["openai/ui"]["entrypoints"][0];
+    assert_eq!(entry["type"], "statusline");
+    let resource = &replies[1]["result"]["resources"][0];
+    assert_eq!(entry["resourceUri"], "ui://codex-statusline/footer");
+    assert_eq!(entry["resourceUri"], resource["uri"]);
+    assert_eq!(resource["mimeType"], "application/json");
+    assert_eq!(replies[2]["result"]["resourceTemplates"], json!([]));
+}

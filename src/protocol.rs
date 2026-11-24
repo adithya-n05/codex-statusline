@@ -1,6 +1,8 @@
 use serde_json::{Value, json};
 use std::io::{self, BufRead, Write};
 
+const URI: &str = "ui://codex-statusline/footer";
+
 pub fn serve(reader: impl BufRead, mut writer: impl Write) -> io::Result<()> {
     for line in reader.lines() {
         let message = serde_json::from_str::<Value>(&line?);
@@ -22,6 +24,16 @@ pub fn serve(reader: impl BufRead, mut writer: impl Write) -> io::Result<()> {
                         "serverInfo":{"name":env!("CARGO_PKG_NAME"),"version":env!("CARGO_PKG_VERSION")}
                     }}),
                     "ping" => json!({"jsonrpc":"2.0","id":id,"result":{}}),
+                    "tools/list" => json!({"jsonrpc":"2.0","id":id,"result":{"tools":[{
+                        "name":"footer","title":"Codex Statusline","description":"Display the current thread in the Codex footer.",
+                        "inputSchema":{"type":"object"},"_meta":{"openai/ui":{"entrypoints":[{"type":"statusline","resourceUri":URI}]}}
+                    }]}}),
+                    "resources/list" => json!({"jsonrpc":"2.0","id":id,"result":{"resources":[{
+                        "name":"footer","uri":URI,"mimeType":"application/json"
+                    }]}}),
+                    "resources/templates/list" => {
+                        json!({"jsonrpc":"2.0","id":id,"result":{"resourceTemplates":[]}})
+                    }
                     _ => error(id.clone(), -32601, "Unknown method"),
                 }
             }
