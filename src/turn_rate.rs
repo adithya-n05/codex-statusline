@@ -5,8 +5,8 @@ use std::collections::HashMap;
 pub(crate) struct TurnRate {
     id: Option<String>,
     started_ms: Option<i64>,
-    thread_total: Option<u64>,
-    baseline: Option<u64>,
+    host_total: Option<u64>,
+    host_baseline: Option<u64>,
     confirmed: u64,
     finished: bool,
     report_ms: Option<i64>,
@@ -18,9 +18,7 @@ impl TurnRate {
         let p = &record["payload"];
         let turn = p["turn_id"].as_str();
         match (record["type"].as_str(), p["type"].as_str()) {
-            (Some("session_meta"), _) if p["forked_from_id"].is_null() => {
-                self.thread_total = Some(0)
-            }
+            (Some("session_meta"), _) if p["forked_from_id"].is_null() => self.host_total = Some(0),
             (Some("event_msg"), Some("task_started"))
                 if turn.is_some() && self.id.as_deref() != turn =>
             {
@@ -28,8 +26,8 @@ impl TurnRate {
                     id: turn.map(str::to_owned),
                     started_ms: crate::speed::timestamp_ms(&record["timestamp"])
                         .or_else(|| p["started_at"].as_i64()?.checked_mul(1000)),
-                    baseline: self.thread_total,
-                    thread_total: self.thread_total,
+                    host_baseline: self.host_total,
+                    host_total: self.host_total,
                     ..Default::default()
                 };
             }
@@ -49,12 +47,9 @@ impl TurnRate {
                     .and_then(Value::as_u64)
                 {
                     self.confirm(n, record);
-                    if let Some(total) = p
-                        .pointer("/thread_token_usage/output_tokens")
-                        .and_then(Value::as_u64)
-                    {
-                        self.baseline = total.checked_sub(n).or(self.baseline);
-                        self.thread_total = Some(self.thread_total.unwrap_or(0).max(total));
+                    // Advance the native baseline by the measured turn output only.
+                    if let Some(end) = self.host_baseline.and_then(|base| base.checked_add(n)) {
+                        self.host_total = self.host_total.max(Some(end));
                     }
                 }
             }
@@ -63,8 +58,8 @@ impl TurnRate {
                     .pointer("/info/total_token_usage/output_tokens")
                     .and_then(Value::as_u64)
                 {
-                    self.thread_total = Some(n);
-                    if let Some(base) = self.baseline {
+                    self.host_total = Some(n);
+                    if let Some(base) = self.host_baseline {
                         self.confirm(n.saturating_sub(base), record);
                     }
                 }
@@ -136,7 +131,7 @@ impl TurnRate {
         }
         if self.id == recent.id && recent.started_ms.is_none() {
             self.confirmed = self.confirmed.max(recent.confirmed);
-            self.baseline = recent.baseline.or(self.baseline);
+            self.host_baseline = recent.host_baseline.or(self.host_baseline);
             self.finished |= recent.finished;
             self.report_ms = self.report_ms.max(recent.report_ms);
             self.visible.extend(recent.visible.clone());
@@ -175,7 +170,7 @@ impl TurnRate {
         let native = thread
             .pointer("/usage/total/output_tokens")
             .and_then(Value::as_u64)
-            .zip(self.baseline)
+            .zip(self.host_baseline)
             .map_or(0, |(n, base)| n.saturating_sub(base));
         let estimated = if native > self.confirmed {
             0

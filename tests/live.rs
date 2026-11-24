@@ -1241,3 +1241,32 @@ fn context_updates_in_a_long_turn_whose_model_and_window_are_outside_the_tail() 
     fs::write(&path, "{}\n").unwrap();
     assert!(session.poll(&state).contains("CTX 12% used"));
 }
+
+#[test]
+fn turn_speed_only_subtracts_totals_from_the_same_counter() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let start = codex_statusline::usage::unix_now() - 10;
+    let state = json!({"thread":{"id":"a","agent":{"state":"working"},"usage":{"total":{"output_tokens":11000}}}});
+    for response_total in [2100, 20100] {
+        observations(
+            &path,
+            &[
+                json!({"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"output_tokens":10000}}}}),
+                json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"t","started_at":start}}),
+                json!({"type":"token_usage_record","payload":{"turn_id":"t","turn_token_usage":{"output_tokens":100},"thread_token_usage":{"output_tokens":response_total}}}),
+            ],
+        );
+        let row = common::plain(&rendered(home.path(), state.clone(), ""));
+        let rate = row
+            .split("Turn ")
+            .nth(1)
+            .unwrap()
+            .split_whitespace()
+            .next()
+            .unwrap()
+            .parse::<f64>()
+            .unwrap();
+        assert!((80.0..=100.1).contains(&rate), "{response_total}: {row}");
+    }
+}
