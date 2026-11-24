@@ -1,3 +1,4 @@
+mod common;
 use serde_json::{Value, json};
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -89,10 +90,7 @@ fn reads_the_displayed_workspace_on_every_resource_request() {
         assert_eq!(resource["mimeType"], "application/json");
         let tree: Value = serde_json::from_str(resource["text"].as_str().unwrap()).unwrap();
         assert_eq!(tree["type"], "text");
-        let first = tree["children"][0]
-            .as_str()
-            .unwrap()
-            .replace('\u{2060}', "");
+        let first = common::plain(&tree["children"][0]);
         assert_eq!(first, path);
     }
     assert_eq!(replies[3]["result"]["contents"][0]["text"], "null");

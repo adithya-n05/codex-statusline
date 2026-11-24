@@ -1,3 +1,4 @@
+mod common;
 use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::{
@@ -281,14 +282,13 @@ fn missing_chat_names_use_only_the_saved_name_of_the_displayed_thread() {
     fs::write(index(home.path()), "").unwrap();
     let db = Connection::open(home.path().join("state_1.sqlite")).unwrap();
     let first = |name: Value| {
-        rendered(
-            home.path(),
-            json!({"thread":{"id":"a","name":name,"workspace":{"cwd":"Dir"}}}),
-            "Tools",
-        )["children"][0]
-            .as_str()
-            .unwrap()
-            .replace('\u{a0}', " ")
+        common::plain(
+            &rendered(
+                home.path(),
+                json!({"thread":{"id":"a","name":name,"workspace":{"cwd":"Dir"}}}),
+                "Tools",
+            )["children"][0],
+        )
     };
     assert_eq!(first(Value::Null), "Dir"); // The index title can contain the entire first prompt.
     db.execute("UPDATE threads SET name='Saved chat'", [])

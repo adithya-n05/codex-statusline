@@ -1,4 +1,4 @@
-use crate::layout::footer;
+use crate::layout::{assemble_footer, header};
 use serde_json::Value;
 
 pub fn render(state: &Value) -> Value {
@@ -31,23 +31,29 @@ pub fn render_enriched(
                 .to_owned(),
         )
     });
-    let mut first = vec![abbreviated.as_deref().unwrap_or(cwd)];
+    let mut first = vec![(abbreviated.as_deref().unwrap_or(cwd), "#FBCB97")];
     if let Some(name) = thread
         .get("name")
         .and_then(Value::as_str)
         .filter(|s| !s.trim().is_empty())
         .or(extra.saved_name.as_deref())
     {
-        first.push(name);
+        first.push((name, "#C1C1C1"));
     }
     if let Some(model) = thread.get("model") {
         first.extend(
             model["display_name"]
                 .as_str()
                 .filter(|s| !s.is_empty())
-                .or_else(|| model["id"].as_str()),
+                .or_else(|| model["id"].as_str())
+                .map(|name| (name, "#E78A53")),
         );
-        first.extend(model["reasoning_level"].as_str().filter(|s| !s.is_empty()));
+        first.extend(
+            model["reasoning_level"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(|s| (s, "#FBCB97")),
+        );
         let tier = model["service_tier_display_name"]
             .as_str()
             .filter(|s| !s.trim().is_empty())
@@ -61,25 +67,27 @@ pub fn render_enriched(
                 })
             });
         first.extend(tier.map(|name| {
-            if name.eq_ignore_ascii_case("normal") {
+            let label = if name.eq_ignore_ascii_case("normal") {
                 "Standard"
             } else {
                 name
-            }
+            };
+            (label, "#5F8787")
         }));
     }
     first.extend(
         thread
             .get("permissions")
-            .and_then(|p| p["display_name"].as_str()),
+            .and_then(|p| p["display_name"].as_str())
+            .map(|s| (s, "#C1C1C1")),
     );
     let approval = thread
         .get("approval")
         .and_then(|a| a["policy"].as_str())
         .map(|p| format!("Approvals {p}"));
-    first.extend(approval.as_deref());
-    first.extend(extra.git.as_deref());
-    first.extend(extra.history.plan.as_deref());
+    first.extend(approval.as_deref().map(|s| (s, "#969696")));
+    first.extend(extra.git.as_deref().map(|s| (s, "#5F8787")));
+    first.extend(extra.history.plan.as_deref().map(|s| (s, "#FBCB97")));
     let version = state["app"]["cli_version"]
         .as_str()
         .map(|v| format!("CLI {v}"));
@@ -142,5 +150,5 @@ pub fn render_enriched(
         }
         middle.push(crate::layout::painted(label, color));
     }
-    footer(&first.join(" · "), middle, &last)
+    assemble_footer(header(&first), middle, &last)
 }

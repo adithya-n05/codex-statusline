@@ -1,12 +1,13 @@
 use unicode_linebreak::linebreaks;
 use unicode_segmentation::UnicodeSegmentation;
 
+const LIMIT: usize = 8192;
+
 /// Codex wraps text leaves at Unicode break opportunities and ASCII word hyphens.
 /// Keep outer rows indivisible so the renderer clips them at each pane's own edge.
 pub fn fixed_line(input: &str) -> String {
     let text = input.replace(|c: char| c.is_control() || c == ' ', "\u{a0}");
     let mut breaks = linebreaks(&text).map(|(offset, _)| offset).peekable();
-    const LIMIT: usize = 8192;
     let mut out = String::with_capacity(text.len().min(LIMIT));
     let mut clip_end = 0;
     let mut after_hyphen = false;
@@ -30,10 +31,52 @@ pub fn fixed_line(input: &str) -> String {
     }
     out
 }
+pub(crate) fn header(fields: &[(&str, &str)]) -> serde_json::Value {
+    use serde_json::json;
+    let mut parts = Vec::new();
+    for (i, &(text, color)) in fields.iter().enumerate() {
+        if i != 0 {
+            parts.push(("\u{a0}·\u{a0}".to_owned(), "#969696"));
+        }
+        parts.push((fixed_line(text), color));
+    }
+    let length: usize = parts.iter().map(|(text, _)| text.len()).sum();
+    let mut room = if length > LIMIT {
+        LIMIT - '…'.len_utf8()
+    } else {
+        LIMIT
+    };
+    let mut spans = Vec::new();
+    for (mut text, color) in parts {
+        if text.len() > room {
+            let end = text
+                .grapheme_indices(true)
+                .map(|(i, _)| i)
+                .take_while(|&i| i <= room)
+                .last()
+                .unwrap_or(0);
+            text.truncate(end);
+            text.push('…');
+            spans.push(painted(text, color));
+            break;
+        }
+        room -= text.len();
+        spans.push(painted(text, color));
+    }
+    json!({"type":"text","children":spans})
+}
+
 /// Codex measures these three logical rows against the displayed pane's cell width.
 pub fn footer(first: &str, middle: Vec<serde_json::Value>, last: &str) -> serde_json::Value {
+    assemble_footer(serde_json::json!(fixed_line(first)), middle, last)
+}
+pub(crate) fn assemble_footer(
+    first: serde_json::Value,
+    middle: Vec<serde_json::Value>,
+    last: &str,
+) -> serde_json::Value {
     use serde_json::json;
-    let mut children = vec![json!(fixed_line(first)), json!("\n")];
+    let mut children = vec![first, json!("\n")];
     children.extend(middle);
     children.extend([json!("\n"), activity_line(last)]);
     json!({"type":"text","props":{"color":"#FBCB97"},"children":children})

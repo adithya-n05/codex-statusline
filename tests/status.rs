@@ -1,18 +1,8 @@
 use codex_statusline::statusline::render;
 use serde_json::{Value, json};
 
-fn plain(tree: &Value) -> String {
-    match tree {
-        Value::String(s) => s.replace('\u{2060}', "").replace('\u{a0}', " "),
-        Value::Object(_) => tree["children"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(plain)
-            .collect(),
-        _ => String::new(),
-    }
-}
+mod common;
+use common::plain;
 
 fn screen(thread: Value) -> String {
     plain(&render(&json!({"thread":thread})))
@@ -231,4 +221,60 @@ fn healthy_usage_is_readable_and_an_empty_allowance_stands_out() {
             (" · reset now", "#969696"),
         ]
     );
+}
+
+#[test]
+fn the_first_row_colors_each_field_by_its_role() {
+    let state = json!({"thread":{"workspace":{"cwd":"Dir"},"name":"Design · review",
+        "model":{"display_name":"Test model","reasoning_level":"xhigh","service_tier":"normal"},
+        "permissions":{"display_name":"Full access"},"approval":{"policy":"never"}}});
+    let tree = render(&state);
+    fn colored(node: &Value, inherited: Option<&str>, out: &mut Vec<(String, String)>) {
+        let color = node
+            .pointer("/props/color")
+            .and_then(Value::as_str)
+            .or(inherited);
+        if let Some(s) = node.as_str() {
+            out.push((
+                s.replace('\u{a0}', " ").replace('\u{2060}', ""),
+                color.unwrap_or("").into(),
+            ));
+        } else if let Some(kids) = node["children"].as_array() {
+            for child in kids {
+                colored(child, color, out);
+            }
+        }
+    }
+    let mut leaves = Vec::new();
+    colored(
+        &tree["children"][0],
+        tree.pointer("/props/color").and_then(Value::as_str),
+        &mut leaves,
+    );
+    for (word, hue) in [
+        ("Dir", "#FBCB97"),
+        ("Design · review", "#C1C1C1"),
+        ("Test model", "#E78A53"),
+        ("xhigh", "#FBCB97"),
+        ("Standard", "#5F8787"),
+        ("Full access", "#C1C1C1"),
+        ("Approvals never", "#969696"),
+    ] {
+        assert!(
+            leaves
+                .iter()
+                .any(|(label, color)| label == word && color == hue),
+            "{word}: {leaves:?}"
+        );
+    }
+    for n in [8177, 8180, 8185, 8187, 8189, 8190, 8191, 8192, 8193] {
+        let mut long = state.clone();
+        long["thread"]["name"] = json!("界".repeat(n / 3) + "e\u{301}");
+        let row = plain(&render(&long)["children"][0]);
+        assert!(
+            row.len() <= 8192 && row.ends_with('…'),
+            "{} bytes",
+            row.len()
+        );
+    }
 }
