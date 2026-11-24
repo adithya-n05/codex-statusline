@@ -125,3 +125,93 @@ fn compaction_red_tracks_the_displayed_models_actual_scope_at_the_exact_boundary
     insert("a", "future-model", "Window", 100, 0, 1000);
     assert_eq!(color("future-model", 66, 1000), "#5F8787");
 }
+fn credit_state(reset: i64) -> Value {
+    json!({"thread":{"id":"a"},"account":{"rate_limits":[{"limit_id":"codex","primary_limit":{"window_minutes":10080,"used_percent":82,"resets_at":reset}}]}})
+}
+fn credit_event(t: &str, reset: i64, balance: &str) -> Value {
+    json!({"timestamp":t,"type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","secondary":{"window_minutes":10080,"resets_at":reset},"credits":{"balance":balance,"unlimited":false}}}})
+}
+fn observations(path: &std::path::Path, events: &[Value]) {
+    let mut file = fs::File::create(path).unwrap();
+    for event in events {
+        writeln!(file, "{event}").unwrap();
+    }
+}
+fn account(home: &std::path::Path, id: &str) {
+    fs::write(
+        home.join("auth.json"),
+        json!({"auth_mode":"chatgpt","tokens":{"account_id":id}}).to_string(),
+    )
+    .unwrap();
+}
+#[test]
+fn credit_observations_are_persisted_once_for_the_authenticated_week() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let reset = 1736294400; // January 8, 2025 at midnight UTC.
+    let a = credit_event("2025-01-01T00:00:00Z", reset, "60000");
+    let b = credit_event("2025-01-02T09:00:00.050Z", reset, "62000");
+    let c = credit_event("2025-01-06T20:30:30Z", reset, "58900.5");
+    let mut unlimited = a.clone();
+    unlimited["payload"]["rate_limits"]["credits"]["unlimited"] = json!(true);
+    let mut other = a.clone();
+    other["payload"]["rate_limits"]["limit_id"] = json!("separate");
+    observations(
+        &path,
+        &[
+            c.clone(),
+            a.clone(),
+            b.clone(),
+            a.clone(),
+            unlimited,
+            other,
+            credit_event("2024-12-30T23:59:59Z", reset, "90000"),
+            credit_event("2025-01-08T00:00:00Z", reset, "40000"),
+            credit_event("2025-01-05T00:00:00Z", reset, "NaN"),
+        ],
+    );
+    let store = home.path().join("codex-statusline/credits.sqlite3");
+    account(home.path(), "another-account");
+    rendered(home.path(), credit_state(reset), "Tools");
+    assert!(!store.exists());
+    account(home.path(), "fixture-account");
+    rendered(home.path(), credit_state(reset), "Tools");
+    assert!(store.exists());
+    observations(&path, &[b]);
+    rendered(home.path(), credit_state(reset), "Tools");
+    let db = Connection::open(store).unwrap();
+    let mut query = db
+        .prepare("SELECT balance FROM observations WHERE account=?1 AND reset=?2 ORDER BY at")
+        .unwrap();
+    let values = query
+        .query_map(rusqlite::params!["fixture-account", reset], |r| {
+            r.get::<_, f64>(0)
+        })
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(values, vec![60000., 62000., 58900.5]);
+}
+#[test]
+fn a_temporarily_unwritable_store_retries_only_valid_weekly_samples() {
+    let home = tempfile::tempdir().unwrap();
+    let gate = home.path().join("codex-statusline");
+    fs::write(&gate, "reserved").unwrap();
+    let mut ledger = codex_statusline::credits::Ledger::default();
+    let mut event = credit_event("2025-01-02T00:00:00Z", 1736294400, "10");
+    ledger.observe(&json!({"type":"other"}));
+    let mut unknown = event.clone();
+    unknown["payload"]["rate_limits"]["secondary"] = Value::Null;
+    ledger.observe(&unknown);
+    event["payload"]["rate_limits"]["credits"]["balance"] = json!(10);
+    ledger.observe(&event);
+    assert!(ledger.sync(home.path(), "a").is_err());
+    fs::remove_file(gate).unwrap();
+    ledger.sync(home.path(), "a").unwrap();
+    ledger.sync(home.path(), "a").unwrap();
+    let count: i64 = Connection::open(home.path().join("codex-statusline/credits.sqlite3"))
+        .unwrap()
+        .query_row("SELECT count(*) FROM observations", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 1);
+}

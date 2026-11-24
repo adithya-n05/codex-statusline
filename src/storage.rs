@@ -36,3 +36,15 @@ pub fn rollout(home: &Path, id: &str) -> Option<PathBuf> {
         .ok()
         .map(PathBuf::from)
 }
+pub fn account_matches(home: &Path, thread: &str, account: &str) -> bool {
+    open(home, "state_")
+        .and_then(|db| {
+            db.query_row(
+                "SELECT EXISTS(SELECT 1 FROM threads WHERE id=?1 AND creator_account_id=?2)",
+                [thread, account],
+                |r| r.get(0),
+            )
+            .ok()
+        })
+        .unwrap_or(false)
+}

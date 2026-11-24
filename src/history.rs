@@ -58,6 +58,9 @@ pub struct History {
 
 impl History {
     pub fn read(&mut self, path: &Path) -> Option<&Metrics> {
+        self.read_with(path, |_| {})
+    }
+    pub fn read_with(&mut self, path: &Path, mut observe: impl FnMut(&Value)) -> Option<&Metrics> {
         let mut file = File::open(path).ok()?;
         let metadata = file.metadata().ok()?;
         #[cfg(unix)]
@@ -124,6 +127,7 @@ impl History {
                         .turns
                         .observe(&event["payload"], &mut cursor.metrics.speed);
                 }
+                observe(&value);
                 cursor.metrics.observe(&value);
             }
         }
