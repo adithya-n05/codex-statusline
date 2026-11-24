@@ -10,11 +10,25 @@ fn main() -> io::Result<ExitCode> {
             let identity = codex_statusline::account::codex_home()
                 .map(|home| codex_statusline::account::Identity::load(&home))
                 .unwrap_or_default();
-            let mut worker = codex_statusline::runtime::Worker::new(|state| {
+            let home = codex_statusline::account::codex_home();
+            let mut history = codex_statusline::history::History::default();
+            let mut worker = codex_statusline::runtime::Worker::new(move |state| {
                 let cwd = state
                     .pointer("/thread/workspace/cwd")
                     .and_then(serde_json::Value::as_str);
+                let metrics = home
+                    .as_deref()
+                    .zip(
+                        state
+                            .pointer("/thread/id")
+                            .and_then(serde_json::Value::as_str),
+                    )
+                    .and_then(|(h, id)| codex_statusline::storage::rollout(h, id))
+                    .and_then(|p| history.read(&p))
+                    .cloned()
+                    .unwrap_or_default();
                 codex_statusline::runtime::Extra {
+                    history: metrics,
                     git: cwd.and_then(|p| codex_statusline::git::summary(std::path::Path::new(p))),
                 }
             });

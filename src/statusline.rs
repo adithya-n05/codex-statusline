@@ -48,6 +48,7 @@ pub fn render_enriched(
         .map(|p| format!("Approvals {p}"));
     first.extend(approval.as_deref());
     first.extend(extra.git.as_deref());
+    first.extend(extra.history.plan.as_deref());
     let version = state["app"]["cli_version"]
         .as_str()
         .map(|v| format!("CLI {v}"));

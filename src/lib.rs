@@ -1,5 +1,6 @@
 pub mod account;
 pub mod git;
+pub mod history;
 pub mod layout;
 pub mod protocol;
 pub mod runtime;

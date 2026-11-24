@@ -17,6 +17,7 @@ fn a_slow_repository_never_blocks_a_read_or_leaks_into_a_different_chat() {
         permit.recv_timeout(Duration::from_secs(3)).unwrap();
         Extra {
             git: Some(format!("branch-{}", s["thread"]["id"].as_str().unwrap())),
+            ..Default::default()
         }
     });
     let a = json!({"thread":{"id":"a","workspace":{"cwd":"/one"}}});
