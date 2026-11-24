@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/adithya-n05/codex-statusline/actions/workflows/check.yml/badge.svg)](https://github.com/adithya-n05/codex-statusline/actions/workflows/check.yml) [![Contributors](https://img.shields.io/github/contributors/adithya-n05/codex-statusline)](https://github.com/adithya-n05/codex-statusline/graphs/contributors) [![Last commit](https://img.shields.io/github/last-commit/adithya-n05/codex-statusline/main)](https://github.com/adithya-n05/codex-statusline/commits/main/) [![MIT license](https://img.shields.io/github/license/adithya-n05/codex-statusline)](LICENSE)
 
-Codex Statusline is a Rust project for the custom footer in Codex CLI. The design fits three screen rows with the standard keyboard shortcuts enabled. The provider is in development.
+Codex Statusline shows the current chat, Git changes, and usage in three rows beneath the Codex CLI prompt. The standard keyboard shortcuts stay available in the main chat and in side chats.
 
 ## What goes where
 
@@ -13,6 +13,41 @@ Codex Statusline is a Rust project for the custom footer in Codex CLI. The desig
 | 3 | Tool activity, CLI version, and session ID | Truncate at the right edge. When usage wraps, its continuation takes this row. |
 
 Codex CLI 0.172.0 gives the footer three rows in a tall window when shortcut hints are visible. A side chat gets its own, narrower column. The terminal tests use both panes to check what fits.
+
+## Install in Codex CLI
+
+Build the binary from the [isolated development shell](#development). If you use a custom Cargo target directory, substitute its release path in the install command.
+
+```sh
+cargo build --release --locked
+install -d "$HOME/.local/bin"
+install -m 755 target/release/codex-statusline "$HOME/.local/bin/codex-statusline"
+codex mcp add codex-statusline --env "CODEX_HOME=${CODEX_HOME:-$HOME/.codex}" -- "$HOME/.local/bin/codex-statusline"
+```
+
+Set these entries in your Codex `config.toml`, using the existing sections if present. Open a new CLI session to load the provider.
+
+```toml
+[features]
+tui_extensions_statusline = true
+
+[tui]
+status_line_provider = { server = "codex-statusline", tool = "footer" }
+```
+
+Codex starts the Rust executable over standard input and output. The provider reads the current pane’s snapshot, Git status, and local Codex records. To switch back, set `status_line_provider = "default"`. You can then run `codex mcp remove codex-statusline` and remove the installed executable.
+
+## Reading the gauges
+
+**Context.** The percentage and window size come from the current chat. The bar changes from Bathory blue to peach at 50% of the measured compaction limit, orange at 75%, and red at 90%. Its fill still shows the CLI’s context usage. When Codex has yet to report a matching limit for the current thread, model, and window, the colors follow context usage up to orange. A CLI update that changes the diagnostic format can also make the threshold unavailable.
+
+**Weekly usage and credits.** `7D` shows the weekly allowance remaining and the time until Codex’s reported reset. Once an observed balance falls, credits take its place until that same reset. A week that opens at 60,000 credits and receives 2,000 more has a base of 62,000. At a balance of 31,000 the bar is half full. A later top up increases the base by the amount added.
+
+The provider keeps timestamped balance observations for the signed in account under `$CODEX_HOME/codex-statusline/credits.sqlite3` (normally `~/.codex/codex-statusline/credits.sqlite3`). Chats can contribute observations in any order. If no available session recorded the balance at reset, the first observation in the window supplies the opening value. Purchases and usage that happen between two observations can only be seen as a net change.
+
+**API usage.** A chat using an API key shows its reported input and output tokens and the CLI’s dollar estimate when available. That estimate covers the thread. Codex supplies the pricing data. Usage across every chat or the whole API key requires separate billing access.
+
+**Speed and tools.** The speed at the end of row two divides the last completed turn’s output tokens by its full duration, including tool waits. Row three counts completed tool calls, with failures still included in the total. The CLI version and session ID follow the counts. Codex controls clipping and the available width in each pane.
 
 ## Development
 
