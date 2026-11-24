@@ -19,10 +19,16 @@ fn main() {
     }
     libtest_mimic::run(
         &Arguments::from_args(),
-        vec![Trial::test("native_footer_geometry", || {
-            native_footer_geometry();
-            Ok(())
-        })],
+        vec![
+            Trial::test("native_footer_geometry", || {
+                native_footer_geometry();
+                Ok(())
+            }),
+            Trial::test("outer_rows_clip_after_resize", || {
+                outer_rows_clip_after_resize();
+                Ok(())
+            }),
+        ],
     )
     .exit();
 }
@@ -41,5 +47,35 @@ fn native_footer_geometry() {
             })
         },
         "three short footer rows",
+    );
+}
+fn outer_rows_clip_after_resize() {
+    let top = "Directory /wide-path · 日本 Hello 世界 · 👩‍💻 tab · name · plan 3/5";
+    let bottom = "Tools · Shell 7 · MCP 3 · CLI 0.172.0 · 01234567-89ab-cdef-0123-456789abcdef";
+    let mut tty = terminal::Terminal::start(120, [top, "CTX 50%", bottom]);
+    tty.wait(
+        |l| l.iter().any(|s| s.contains("456789abcdef")),
+        "unclipped session ID",
+    );
+    tty.resize(34);
+    tty.wait(
+        |lines| {
+            lines.windows(3).any(|s| {
+                s[0].trim().starts_with("Directory")
+                    && s[0].trim_end().ends_with('…')
+                    && s[1].trim() == "CTX 50%"
+                    && s[2].trim().starts_with("Tools")
+                    && s[2].trim_end().ends_with('…')
+            })
+        },
+        "a clipped first and third row with the middle row intact",
+    );
+    tty.resize(120);
+    tty.wait(
+        |l| {
+            l.windows(3)
+                .any(|s| s[0].contains("plan 3/5") && s[2].contains("456789abcdef"))
+        },
+        "restored footer on widening",
     );
 }

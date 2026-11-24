@@ -24,11 +24,21 @@ pub struct Terminal {
     queries: Vec<u8>,
     remaining: Vec<(&'static [u8], &'static [u8])>,
     child: Box<dyn Child + Send + Sync>,
-    _pty: Box<dyn MasterPty + Send>,
+    pty: Box<dyn MasterPty + Send>,
     _root: TempDir,
 }
 
 impl Terminal {
+    pub fn resize(&mut self, width: u16) {
+        self.parser.screen_mut().set_size(ROWS, width);
+        self.pty
+            .resize(PtySize {
+                rows: ROWS,
+                cols: width,
+                ..Default::default()
+            })
+            .unwrap();
+    }
     pub fn start(width: u16, rows: [&str; 3]) -> Self {
         let root = tempfile::tempdir().unwrap();
         let base = root.path().canonicalize().unwrap();
@@ -107,7 +117,7 @@ args = {}
             queries: vec![],
             remaining: CAPABILITIES.to_vec(),
             child,
-            _pty: pty.master,
+            pty: pty.master,
             _root: root,
         }
     }
