@@ -61,3 +61,15 @@ fn permission_scope_and_approval_policy_remain_independent() {
         );
     }
 }
+#[test]
+fn metadata_closes_the_third_row_and_follows_the_displayed_session() {
+    for id in ["019abc-001", "019abc-002"] {
+        let state =
+            json!({"app":{"cli_version":"1.2.3"},"thread":{"id":id,"workspace":{"cwd":"Dir"}}});
+        let footer = plain(&render(&state));
+        assert_eq!(
+            footer.split('\n').nth(2),
+            Some(format!("CLI 1.2.3 · {id}").as_str())
+        );
+    }
+}

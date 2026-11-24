@@ -36,5 +36,13 @@ pub fn render(state: &Value) -> Value {
         .and_then(|a| a["policy"].as_str())
         .map(|p| format!("Approvals {p}"));
     first.extend(approval.as_deref());
-    footer(&first.join(" · "), Vec::new(), "")
+    let version = state["app"]["cli_version"]
+        .as_str()
+        .map(|v| format!("CLI {v}"));
+    let last = [version.as_deref(), thread.get("id").and_then(Value::as_str)]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" · ");
+    footer(&first.join(" · "), Vec::new(), &last)
 }
