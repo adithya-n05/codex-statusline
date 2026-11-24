@@ -257,7 +257,7 @@ fn the_first_row_colors_each_field_by_its_role() {
         ("Test model", "#E78A53"),
         ("xhigh", "#FBCB97"),
         ("Standard", "#5F8787"),
-        ("Full access", "#C1C1C1"),
+        ("Full access", "#969696"),
         ("Approvals never", "#969696"),
     ] {
         assert!(

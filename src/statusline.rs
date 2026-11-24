@@ -79,7 +79,7 @@ pub fn render_enriched(
         thread
             .get("permissions")
             .and_then(|p| p["display_name"].as_str())
-            .map(|s| (s, "#C1C1C1")),
+            .map(|s| (s, "#969696")),
     );
     let approval = thread
         .get("approval")
