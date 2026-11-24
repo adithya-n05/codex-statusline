@@ -123,9 +123,7 @@ impl History {
                         .record(&event["payload"]["item"], &mut cursor.seen);
                 }
                 if event["type"] == "event_msg" {
-                    cursor
-                        .turns
-                        .observe(&event["payload"], &mut cursor.metrics.speed);
+                    cursor.turns.observe(event, &mut cursor.metrics.speed);
                 }
                 observe(&value);
                 cursor.metrics.observe(&value);

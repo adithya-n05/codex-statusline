@@ -428,3 +428,47 @@ fn whole_credit_labels_preserve_fractional_bar_math() {
             .contains("Credits 1 / 1 · 50% left")
     );
 }
+#[test]
+fn generation_speed_updates_between_model_responses_without_charging_tool_waits() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let event = |stamp: &str, p: Value| json!({"timestamp":stamp,"type":"event_msg","payload":p});
+    let output = |turn: &str, start: i64| {
+        event(
+            "2025-01-01T00:00:01Z",
+            json!({"type":"item_completed","turn_id":turn,"started_at_ms":start,"item":{"type":"Reasoning"}}),
+        )
+    };
+    let count = |t: &str, total: u64, n: u64| {
+        event(
+            t,
+            json!({"type":"token_count","info":{"total_token_usage":{"output_tokens":total},"last_token_usage":{"output_tokens":n}}}),
+        )
+    };
+    let mut events = vec![
+        event(
+            "2025-01-01T00:00:00Z",
+            json!({"type":"task_started","turn_id":"one"}),
+        ),
+        output("one", 1735689600000),
+        count("2025-01-01T00:00:02Z", 200, 200),
+    ];
+    let state = json!({"thread":{"id":"a"}});
+    let read = |events: &[Value]| {
+        observations(&path, events);
+        rendered(home.path(), state.clone(), "Tools").to_string()
+    };
+    assert!(read(&events).contains("Live 100 tok/s"));
+    events.push(event("2025-01-01T00:00:52Z",json!({"type":"item_completed","turn_id":"one","started_at_ms":1735689602000u64,"item":{"type":"CommandExecution","id":"cmd"}})));
+    events.push(output("other", 1735689602000));
+    events.push(output("one", 1735689652000));
+    events.push(count("2025-01-01T00:00:52Z", 200, 200));
+    events.push(count("2025-01-01T00:00:53.500Z", 425, 225));
+    assert!(read(&events).contains("Live 150 tok/s"));
+    events.push(event(
+        "2025-01-01T00:01:00Z",
+        json!({"type":"task_complete","turn_id":"one","duration_ms":60000}),
+    ));
+    let idle = read(&events);
+    assert!(idle.contains("Last 150 tok/s") && !idle.contains("Live "));
+}

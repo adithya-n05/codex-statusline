@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 rusqlite = "0.37"
 serde_json = "1"
+time = { version = "0.3.55", default-features = false, features = ["parsing"] }
 unicode-linebreak = "0.1"
 unicode-segmentation = "1"
 [dev-dependencies]

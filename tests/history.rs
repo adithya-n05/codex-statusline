@@ -99,3 +99,41 @@ fn tool_activity_includes_completed_codex_extensions() {
         Some("Tools 3 · Web 1 · Other 2")
     );
 }
+#[test]
+fn abort_preserves_the_latest_generation_rate_only_for_its_own_turn() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("speed.jsonl");
+    let mut f = fs::File::create(&path).unwrap();
+    let mut history = History::default();
+    for (payload, want) in [
+        (json!({"type":"task_started","turn_id":"a"}), None),
+        (
+            json!({"type":"item_completed","turn_id":"a","item":{"type":"AgentMessage"},"started_at_ms":1735689600000u64}),
+            None,
+        ),
+        (
+            json!({"type":"token_count","info":{"total_token_usage":{"output_tokens":42},"last_token_usage":{"output_tokens":42}}}),
+            Some("Live 42 tok/s"),
+        ),
+        (
+            json!({"type":"turn_aborted","turn_id":"stale"}),
+            Some("Live 42 tok/s"),
+        ),
+        (
+            json!({"type":"turn_aborted","turn_id":"a"}),
+            Some("Last 42 tok/s"),
+        ),
+        (
+            json!({"type":"turn_aborted","turn_id":"a"}),
+            Some("Last 42 tok/s"),
+        ),
+    ] {
+        writeln!(
+            f,
+            "{}",
+            json!({"timestamp":"2025-01-01T00:00:01Z","type":"event_msg","payload":payload})
+        )
+        .unwrap();
+        assert_eq!(history.read(&path).unwrap().speed.as_deref(), want);
+    }
+}
