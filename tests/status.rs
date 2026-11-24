@@ -98,3 +98,38 @@ fn context_uses_the_displayed_models_window_and_native_percentage() {
         }
     }
 }
+#[test]
+fn weekly_allowance_decreases_and_counts_down_to_the_reported_reset() {
+    use codex_statusline::usage::weekly;
+    let account = json!({"rate_limits":[
+        {"limit_id":"other","secondary_limit":{"window_minutes":10080,"used_percent":99}},
+        {"limit_id":"codex","primary_limit":{"window_minutes":300,"used_percent":90},
+         "secondary_limit":{"window_minutes":10080,"used_percent":30,"resets_at":186500}}]});
+    let tree = weekly(&account, 10000);
+    assert_eq!(
+        tree.iter().map(plain).collect::<String>(),
+        "7D 70% left [██████████████░░░░░░] · reset 2d 1h"
+    );
+    assert!(weekly(&json!({}), 0).is_empty());
+    assert!(
+        weekly(
+            &json!({"rate_limits":[{"primary_limit":{"window_minutes":300,"used_percent":0}}]}),
+            0
+        )
+        .is_empty()
+    );
+    for (delta, expected) in [(3601, "1h 0m"), (61, "1m"), (0, "now")] {
+        let x = weekly(&account, 186500 - delta);
+        assert!(x.iter().map(plain).collect::<String>().ends_with(expected));
+    }
+    let x = weekly(
+        &json!({"rate_limits":[{"primary_limit":{"window_minutes":10080,"used_percent":105}}]}),
+        0,
+    );
+    assert!(
+        x.iter()
+            .map(plain)
+            .collect::<String>()
+            .starts_with("7D 0% left")
+    );
+}

@@ -44,6 +44,11 @@ pub fn render(state: &Value) -> Value {
         .flatten()
         .collect::<Vec<_>>()
         .join(" · ");
-    let middle = crate::usage::context(&state["thread"]["usage"]["context"], None);
+    let mut middle = crate::usage::context(&state["thread"]["usage"]["context"], None);
+    let weekly = crate::usage::weekly(&state["account"], crate::usage::unix_now());
+    if !middle.is_empty() && !weekly.is_empty() {
+        middle.push(serde_json::json!(" · "));
+    }
+    middle.extend(weekly);
     footer(&first.join(" · "), middle, &last)
 }
