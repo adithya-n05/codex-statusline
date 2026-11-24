@@ -121,6 +121,13 @@ fn main() -> io::Result<ExitCode> {
                     }
                     extra.measured_context = recent.context.ahead_of_snapshot(t);
                     extra.history.merge_recent_speed(recent, home, id);
+                    // Early tool totals should still arrive alongside the saved chat title.
+                    if awaiting_worker
+                        && t["name"].as_str().is_none_or(|name| name.trim().is_empty())
+                    {
+                        extra.saved_name = codex_statusline::storage::saved_name(home, id);
+                    }
+                    recent_history.update_tools(&mut extra.history);
                 }
                 if let Some((home, account)) = local_home.as_deref().zip(live_account.as_deref()) {
                     let _ = live_ledger.sync_with_timeout(

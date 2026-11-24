@@ -5,17 +5,21 @@ use std::collections::HashMap;
 pub struct Activity {
     counts: [usize; 6],
     failed: usize,
+    seen: std::sync::Arc<HashMap<String, bool>>,
 }
 
-impl Activity {
-    pub fn observe(&mut self, event: &Value, seen: &mut HashMap<String, bool>) {
+pub(crate) struct Call {
+    id: String,
+    category: usize,
+    failed: bool,
+}
+impl Call {
+    pub fn parse(event: &Value) -> Option<Self> {
         let p = &event["payload"];
         let (id, index, failed) = match (event["type"].as_str(), p["type"].as_str()) {
             (Some("event_msg"), Some("item_started" | "item_completed")) => {
                 let item = &p["item"];
-                let Some(index) = item_category(item) else {
-                    return;
-                };
+                let index = item_category(item)?;
                 let failed = item["status"]
                     .as_str()
                     .is_some_and(|s| s.eq_ignore_ascii_case("failed"))
@@ -25,9 +29,7 @@ impl Activity {
                 (item["id"].as_str(), index, failed)
             }
             (Some("response_item"), Some("function_call" | "custom_tool_call")) => {
-                let Some(name) = p["name"].as_str() else {
-                    return;
-                };
+                let name = p["name"].as_str()?;
                 let index = if p["namespace"]
                     .as_str()
                     .is_some_and(|n| n.starts_with("mcp__"))
@@ -40,7 +42,7 @@ impl Activity {
                         | "wait"
                         | "functions.exec"
                         | "functions.wait"
-                        | "multi_tool_use.parallel" => return,
+                        | "multi_tool_use.parallel" => return None,
                         "exec_command" | "shell" | "shell_command" => 0,
                         "write_stdin" => 5,
                         "apply_patch" => 3,
@@ -50,19 +52,26 @@ impl Activity {
                 };
                 (p["call_id"].as_str(), index, false)
             }
-            _ => return,
+            _ => return None,
         };
-        let Some(id) = id.filter(|id| !id.is_empty()) else {
-            return;
-        };
+        let id = id.filter(|id| !id.is_empty())?;
+        Some(Self {
+            id: id.to_owned(),
+            category: index,
+            failed,
+        })
+    }
+}
+impl Activity {
+    pub fn record(&mut self, call: &Call) {
         use std::collections::hash_map::Entry;
-        match seen.entry(id.to_owned()) {
+        match std::sync::Arc::make_mut(&mut self.seen).entry(call.id.clone()) {
             Entry::Vacant(slot) => {
-                slot.insert(failed);
-                self.counts[index] += 1;
-                self.failed += usize::from(failed);
+                slot.insert(call.failed);
+                self.counts[call.category] += 1;
+                self.failed += usize::from(call.failed);
             }
-            Entry::Occupied(mut slot) if failed && !*slot.get() => {
+            Entry::Occupied(mut slot) if call.failed && !*slot.get() => {
                 slot.insert(true);
                 self.failed += 1;
             }

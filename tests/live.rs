@@ -1134,3 +1134,72 @@ fn weekly_allowance_uses_the_next_report_for_the_signed_in_accounts_week() {
     let mut foreign = provider::Provider::open(home.path());
     assert!(!foreign.poll(&empty).contains("WKLY"));
 }
+
+#[test]
+fn tool_starts_and_failures_reach_the_next_read_once_even_in_a_large_chat() {
+    for large in [false, true] {
+        let home = tempfile::tempdir().unwrap();
+        let path = index(home.path());
+        let mut session = provider::Provider::open(home.path());
+        let state = json!({"thread":{"id":"a","agent":{"state":"working"}}});
+        let call = |when: &str, id: &str, kind: &str, status: &str| json!({"type":"event_msg","payload":{"type":when,"item":{"id":id,"type":kind,"status":status}}});
+        let mut f = fs::File::create(&path).unwrap();
+        writeln!(
+            f,
+            "{}",
+            call("item_started", "original", "CommandExecution", "running")
+        )
+        .unwrap();
+        if large {
+            writeln!(f, "{}", json!({"padding":"x".repeat(600_000)})).unwrap();
+        }
+        let deadline = Instant::now() + Duration::from_secs(4);
+        while !session.poll(&state).contains("Tools 1 · Shell 1") {
+            assert!(
+                large && Instant::now() < deadline,
+                "small files must be ready on the first read"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        for id in ["one", "two", "three"] {
+            writeln!(
+                f,
+                "{}",
+                call("item_started", id, "CommandExecution", "running")
+            )
+            .unwrap();
+        }
+        assert!(session.poll(&state).contains("Tools 4 · Shell 4"));
+        for id in ["original", "one", "original"] {
+            writeln!(
+                f,
+                "{}",
+                call("item_completed", id, "CommandExecution", "failed")
+            )
+            .unwrap();
+        }
+        let web = call("item_started", "four", "WebSearch", "running");
+        write!(f, "{web}").unwrap();
+        assert!(
+            session
+                .poll(&state)
+                .contains("Tools 4 · Shell 4 · Failed 2")
+        );
+        writeln!(f).unwrap();
+        for _ in 0..2 {
+            assert!(
+                session
+                    .poll(&state)
+                    .contains("Tools 5 · Shell 4 · Web 1 · Failed 2")
+            );
+        }
+        assert!(
+            !session
+                .poll(&json!({"thread":{"id":"other"}}))
+                .contains("Shell 4")
+        );
+        fs::rename(&path, home.path().join("previous.jsonl")).unwrap();
+        fs::write(&path, "{}\n").unwrap();
+        assert!(session.poll(&state).contains("Tools 0"));
+    }
+}
