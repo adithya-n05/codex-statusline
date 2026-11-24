@@ -52,11 +52,16 @@ pub fn render_enriched(
     let version = state["app"]["cli_version"]
         .as_str()
         .map(|v| format!("CLI {v}"));
-    let last = [version.as_deref(), thread.get("id").and_then(Value::as_str)]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-        .join(" · ");
+    let tools = extra.history.tools_label();
+    let last = [
+        tools.as_deref(),
+        version.as_deref(),
+        thread.get("id").and_then(Value::as_str),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" · ");
     let mut middle = crate::usage::context(&state["thread"]["usage"]["context"], None);
     let weekly = if matches!(identity, crate::account::Identity::Api) {
         crate::usage::api_thread(&state["thread"]["usage"])

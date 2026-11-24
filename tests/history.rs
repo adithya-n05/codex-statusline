@@ -51,3 +51,29 @@ fn oversized_unfinished_events_never_become_a_plan_when_more_bytes_arrive() {
         Some("Plan 0/1")
     );
 }
+#[test]
+fn tool_activity_counts_completed_operations_once_and_keeps_failures_visible() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("tools.jsonl");
+    let mut f = std::fs::File::create(&path).unwrap();
+    for (id, kind, status) in [
+        ("1", "CommandExecution", "Completed"),
+        ("2", "FileChange", "Failed"),
+        ("2", "FileChange", "Failed"),
+        ("3", "McpToolCall", "failed"),
+        ("4", "WebSearch", "Completed"),
+        ("5", "FutureToolCall", "Completed"),
+        ("6", "AgentMessage", "Completed"),
+    ] {
+        writeln!(f,"{}",json!({"type":"event_msg","payload":{"type":"item_completed","item":{"id":id,"type":kind,"status":status}}})).unwrap();
+    }
+    let mut h = History::default();
+    assert_eq!(
+        h.read(&path).unwrap().tools_label().as_deref(),
+        Some("Tools 5 · Shell 1 · MCP 1 · Web 1 · Patch 1 · Other 1 · Failed 2")
+    );
+    assert_eq!(
+        h.read(&path).unwrap().tools_label().as_deref(),
+        Some("Tools 5 · Shell 1 · MCP 1 · Web 1 · Patch 1 · Other 1 · Failed 2")
+    );
+}

@@ -9,6 +9,8 @@ use std::{
 #[derive(Clone, Default)]
 pub struct Metrics {
     pub plan: Option<String>,
+    available: bool,
+    activity: crate::activity::Activity,
 }
 
 impl Metrics {
@@ -45,6 +47,7 @@ struct Cursor {
     file_id: u64,
     offset: u64,
     metrics: Metrics,
+    seen: std::collections::HashSet<String>,
 }
 #[derive(Default)]
 pub struct History {
@@ -107,11 +110,24 @@ impl History {
             }
             cursor.offset += read as u64;
             if let Ok(value) = serde_json::from_slice(&record) {
+                let event: &Value = &value;
+                if event["type"] == "event_msg" && event["payload"]["type"] == "item_completed" {
+                    cursor
+                        .metrics
+                        .activity
+                        .record(&event["payload"]["item"], &mut cursor.seen);
+                }
                 cursor.metrics.observe(&value);
             }
         }
+        cursor.metrics.available = true;
         self.files.push_front((path.into(), cursor));
         self.files.truncate(8);
         self.files.front().map(|(_, cursor)| &cursor.metrics)
+    }
+}
+impl Metrics {
+    pub fn tools_label(&self) -> Option<String> {
+        self.available.then(|| self.activity.label())
     }
 }
