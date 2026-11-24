@@ -11,6 +11,7 @@ pub struct Metrics {
     pub plan: Option<String>,
     pub context: crate::saved_context::SavedContext,
     pub speed: Option<String>,
+    pub(crate) latest_tool: Option<crate::speed::ToolMeasurement>,
     pub(crate) turn_rate: crate::turn_rate::TurnRate,
     tool_position: Option<(u64, u64)>,
     activity: crate::activity::Activity,
@@ -130,14 +131,16 @@ impl History {
                 if let Some(call) = crate::activity::Call::parse(event) {
                     cursor.metrics.activity.record(&call);
                 }
-                let tool_started = cursor.metrics.turn_rate.observe(event);
-                cursor
-                    .turns
-                    .observe(event, tool_started, &mut cursor.metrics.speed);
+                let call = cursor.metrics.turn_rate.observe(event);
+                cursor.turns.observe(event, call, &mut cursor.metrics.speed);
                 observe(&value);
                 cursor.metrics.observe(&value);
             }
         }
+        cursor
+            .metrics
+            .latest_tool
+            .clone_from(&cursor.turns.latest_tool);
         cursor.metrics.tool_position = Some((file_id, cursor.offset));
         self.files.push_front((path.into(), cursor));
         self.files.truncate(8);
@@ -150,6 +153,7 @@ impl Metrics {
         self.turn_rate.restore_start(home, thread);
         if let Some(speed) = &recent.speed {
             self.speed = Some(speed.clone());
+            self.latest_tool.clone_from(&recent.latest_tool);
         }
     }
     pub fn tools_label(&self) -> Option<String> {
@@ -277,9 +281,10 @@ fn recent(
             if tail.end > context_offset {
                 result.context.observe(&event);
             }
-            let tool_started = result.turn_rate.observe(&event);
-            turns.observe(&event, tool_started, &mut result.speed);
+            let call = result.turn_rate.observe(&event);
+            turns.observe(&event, call, &mut result.speed);
         }
     }
+    result.latest_tool = turns.latest_tool;
     Some((result, tail))
 }

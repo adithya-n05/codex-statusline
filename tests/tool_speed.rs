@@ -227,3 +227,46 @@ fn invalid_or_missing_tool_creation_times_cannot_supply_a_generation_rate() {
         );
     }
 }
+
+#[test]
+fn a_running_tool_shows_the_latest_generation_rate_instead_of_hiding_it_in_the_turn_average() {
+    let mut chat = Chat::open();
+    let mut call = chat.call(
+        "code",
+        json!({"type":"custom_tool_call","name":"exec","input":"x".repeat(4000)}),
+        25,
+    );
+    call["payload"]["internal_chat_message_metadata_passthrough"]["create_time"] =
+        json!(chat.start + 20);
+    chat.append(call);
+    chat.append(chat.report(26, 300, 300));
+    assert!(chat.row().contains("Latest 50 tok/s"));
+    chat.append(chat.call(
+        "code",
+        json!({"type":"custom_tool_call_output","output":"result".repeat(3000)}),
+        70,
+    ));
+    assert!(
+        chat.provider
+            .poll(&json!({"thread":{"id":"chat","agent":{"state":"waiting"}}}))
+            .contains("Latest 50 tok/s")
+    );
+    chat.append(json!({"type":"event_msg","payload":{"type":"item_completed","turn_id":"turn","started_at_ms":(chat.start+72)*1000,"item":{"type":"Reasoning","id":"thinking"}}}));
+    chat.append(chat.call(
+        "next",
+        json!({"type":"function_call","name":"lookup","arguments":"{}"}),
+        74,
+    ));
+    assert!(chat.row().contains("Turn est."));
+    chat.append(chat.report(75, 510, 210));
+    assert!(chat.row().contains("Latest 70 tok/s"));
+    chat.append(json!({"type":"event_msg","payload":{"type":"item_completed","turn_id":"turn","started_at_ms":(chat.start+76)*1000,"item":{"type":"AgentMessage","id":"answer"}}}));
+    chat.append(chat.report(78, 610, 100));
+    let text_response = chat.row();
+    assert!(
+        text_response.contains("Turn ") && !text_response.contains("Latest 70"),
+        "{text_response}"
+    );
+    chat.append(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"turn","duration_ms":80000}}));
+    assert!(chat.row().contains("Last 50 tok/s"));
+}

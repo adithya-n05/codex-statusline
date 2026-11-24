@@ -15,8 +15,11 @@ pub(crate) struct TurnRate {
 }
 
 impl TurnRate {
-    /// Return the creation time of a newly observed model request for response timing.
-    pub fn observe(&mut self, record: &Value) -> Option<i64> {
+    /// Return a newly observed model request to the response timer.
+    pub fn observe<'a>(
+        &mut self,
+        record: &'a Value,
+    ) -> Option<crate::generated_call::GeneratedCall<'a>> {
         let p = &record["payload"];
         let turn = p["turn_id"].as_str();
         match (record["type"].as_str(), p["type"].as_str()) {
@@ -41,7 +44,7 @@ impl TurnRate {
                 self.visible_item(record)
             }
             (Some("response_item"), _) if !self.finished => {
-                if let Some(call) = crate::generated_call::GeneratedCall::parse(record)
+                if let Some(mut call) = crate::generated_call::GeneratedCall::parse(record)
                     && let Some(turn) = call.turn.or(self.id.as_deref())
                     && self.id.as_deref().is_none_or(|active| active == turn)
                     && let Some(at) = crate::speed::timestamp_ms(&record["timestamp"])
@@ -54,15 +57,16 @@ impl TurnRate {
                         self.calls.entry(call.id.to_owned())
                     {
                         entry.insert((at, call.bytes));
-                        let seconds = p
-                            .pointer("/internal_chat_message_metadata_passthrough/create_time")?
-                            .as_f64()?;
-                        let created = (seconds * 1000.).round() as i64;
-                        return (created > 0
-                            && created <= at
-                            && self.started_ms.is_none_or(|start| created >= start)
-                            && self.report_ms.is_none_or(|report| created >= report))
-                        .then_some(created);
+                        if self.report_ms.is_some_and(|report| at <= report) {
+                            return None;
+                        }
+                        call.created_ms = call.created_ms.filter(|&created| {
+                            created > 0
+                                && created <= at
+                                && self.started_ms.is_none_or(|start| created >= start)
+                                && self.report_ms.is_none_or(|report| created >= report)
+                        });
+                        return Some(call);
                     }
                 }
             }
@@ -192,7 +196,12 @@ impl TurnRate {
             seconds.checked_mul(1000)
         });
     }
-    pub fn label(&self, thread: &Value, now_ms: i64) -> Option<String> {
+    pub fn label(
+        &self,
+        thread: &Value,
+        now_ms: i64,
+        latest_tool: Option<&crate::speed::ToolMeasurement>,
+    ) -> Option<String> {
         if self.finished
             || !matches!(
                 thread.pointer("/agent/state")?.as_str()?,
@@ -221,6 +230,14 @@ impl TurnRate {
                 .sum::<u64>()
                 .div_ceil(4)
         };
+        if estimated == 0
+            && native <= self.confirmed
+            && let Some(sample) = latest_tool
+            && Some(sample.turn.as_str()) == self.id.as_deref()
+            && self.report_ms.is_none_or(|report| sample.at >= report)
+        {
+            return Some(format!("Latest {:.0} tok/s", sample.rate));
+        }
         let tokens = self.confirmed.max(native).saturating_add(estimated);
         let label = if estimated > 0 { "Turn est." } else { "Turn" };
         (tokens > 0 && elapsed > 0).then(|| {

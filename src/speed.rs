@@ -1,5 +1,12 @@
 use serde_json::Value;
 
+#[derive(Clone)]
+pub(crate) struct ToolMeasurement {
+    pub turn: String,
+    pub at: i64,
+    pub rate: f64,
+}
+
 #[derive(Default)]
 pub struct Turns {
     cumulative: u64,
@@ -9,6 +16,8 @@ pub struct Turns {
     active: Option<(String, u64)>,
     observed: bool,
     output_started_ms: Option<i64>,
+    includes_tool: bool,
+    pub(crate) latest_tool: Option<ToolMeasurement>,
     last_response_rate: Option<f64>,
 }
 
@@ -19,18 +28,22 @@ impl Turns {
             ..Default::default()
         }
     }
-    pub fn observe(&mut self, event: &Value, tool_started: Option<i64>, last: &mut Option<String>) {
+    pub fn observe(
+        &mut self,
+        event: &Value,
+        call: Option<crate::generated_call::GeneratedCall<'_>>,
+        last: &mut Option<String>,
+    ) {
         let timestamp = &event["timestamp"];
         let payload = &event["payload"];
-        if let Some(start) = tool_started {
+        if let Some(call) = call {
             if self.partial && self.active.is_none() {
-                self.active = payload
-                    .pointer("/internal_chat_message_metadata_passthrough/turn_id")
-                    .or_else(|| payload.get("turn_id"))
-                    .and_then(Value::as_str)
-                    .map(|id| (id.to_owned(), self.cumulative));
+                self.active = call.turn.map(|id| (id.to_owned(), self.cumulative));
             }
-            self.include_start(start);
+            self.includes_tool = true;
+            if let Some(start) = call.created_ms {
+                self.include_start(start);
+            }
             return;
         }
         if event["type"] == "token_usage_record" {
@@ -63,6 +76,8 @@ impl Turns {
                 self.active = event["turn_id"]
                     .as_str()
                     .map(|id| (id.into(), self.cumulative));
+                self.latest_tool = None;
+                self.includes_tool = false;
                 self.response_cumulative = 0;
                 self.awaiting_native_mirror = None;
                 self.observed = false;
@@ -141,29 +156,31 @@ impl Turns {
     fn include_start(&mut self, start: i64) {
         self.output_started_ms = Some(self.output_started_ms.map_or(start, |old| old.min(start)));
     }
-    fn record_rate(
-        &mut self,
-        timestamp: &Value,
-        output: &Value,
-        last: &mut Option<String>,
-    ) -> bool {
+    fn record_rate(&mut self, timestamp: &Value, output: &Value, last: &mut Option<String>) {
+        let includes_tool = std::mem::take(&mut self.includes_tool);
         let rate = self
             .output_started_ms
             .and_then(|start| response_rate(start, timestamp, output));
-        if let Some(rate) = rate {
+        self.latest_tool = None;
+        if let Some((at, rate)) = rate {
+            if includes_tool && let Some((turn, _)) = &self.active {
+                self.latest_tool = Some(ToolMeasurement {
+                    turn: turn.clone(),
+                    at,
+                    rate,
+                });
+            }
             self.output_started_ms = None;
             self.last_response_rate = Some(rate);
             *last = Some(format!("Latest {rate:.0} tok/s"));
-            return true;
         }
-        false
     }
 }
-fn response_rate(start: i64, timestamp: &Value, output: &Value) -> Option<f64> {
-    let end = i128::from(timestamp_ms(timestamp)?);
-    let elapsed = end - i128::from(start);
+fn response_rate(start: i64, timestamp: &Value, output: &Value) -> Option<(i64, f64)> {
+    let end = timestamp_ms(timestamp)?;
+    let elapsed = i128::from(end) - i128::from(start);
     let output = output.as_u64()?;
-    (elapsed > 0 && output > 0).then(|| output as f64 * 1000. / elapsed as f64)
+    (elapsed > 0 && output > 0).then(|| (end, output as f64 * 1000. / elapsed as f64))
 }
 pub(crate) fn timestamp_ms(timestamp: &Value) -> Option<i64> {
     let ns = time::OffsetDateTime::parse(

@@ -6,6 +6,7 @@ pub(crate) struct GeneratedCall<'a> {
     pub id: &'a str,
     pub turn: Option<&'a str>,
     pub bytes: u64,
+    pub created_ms: Option<i64>,
 }
 
 impl<'a> GeneratedCall<'a> {
@@ -52,6 +53,10 @@ impl<'a> GeneratedCall<'a> {
             id,
             turn,
             bytes: bytes as u64,
+            created_ms: p
+                .pointer("/internal_chat_message_metadata_passthrough/create_time")
+                .and_then(Value::as_f64)
+                .map(|seconds| (seconds * 1000.).round() as i64),
         })
     }
 }
