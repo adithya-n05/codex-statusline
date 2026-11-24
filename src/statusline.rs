@@ -44,5 +44,6 @@ pub fn render(state: &Value) -> Value {
         .flatten()
         .collect::<Vec<_>>()
         .join(" · ");
-    footer(&first.join(" · "), Vec::new(), &last)
+    let middle = crate::usage::context(&state["thread"]["usage"]["context"], None);
+    footer(&first.join(" · "), middle, &last)
 }

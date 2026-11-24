@@ -73,3 +73,28 @@ fn metadata_closes_the_third_row_and_follows_the_displayed_session() {
         );
     }
 }
+#[test]
+fn context_uses_the_displayed_models_window_and_native_percentage() {
+    for (context, start, end) in [
+        (
+            json!({"context_window_size":258400,"used_tokens":120000,"used_percentage":48}),
+            "CTX 48% [",
+            " / 258400",
+        ),
+        (
+            json!({"context_window_size":1000,"used_tokens":250}),
+            "CTX 25% [",
+            " / 1000",
+        ),
+        (json!({"context_window_size":800000}), "CTX —", " / 800000"),
+        (json!({"used_percentage":12}), "CTX 12% [", "]"),
+        (json!({"context_window_size":0}), "", ""),
+    ] {
+        let text = screen(json!({"usage":{"context":context}}));
+        let row = text.split('\n').nth(1).unwrap();
+        assert!(row.starts_with(start) && row.ends_with(end), "{row}");
+        if start.is_empty() {
+            assert!(row.is_empty());
+        }
+    }
+}
