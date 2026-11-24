@@ -62,7 +62,7 @@ pub fn render_enriched(
             });
         first.extend(tier.map(|name| {
             if name.eq_ignore_ascii_case("normal") {
-                "Normal speed"
+                "Standard"
             } else {
                 name
             }
