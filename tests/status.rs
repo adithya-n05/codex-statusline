@@ -78,25 +78,21 @@ fn context_uses_the_displayed_models_window_and_native_percentage() {
     for (context, start, end) in [
         (
             json!({"context_window_size":258400,"used_tokens":120000,"used_percentage":48}),
-            "Context 48% used [",
+            "CTX 48% used [",
             "]",
         ),
         (
             json!({"context_window_size":1000,"used_tokens":250}),
-            "Context 25% used [",
+            "CTX 25% used [",
             "]",
         ),
         (
             json!({"context_window_size":800000}),
-            "Context awaiting usage",
+            "CTX awaiting usage",
             "usage",
         ),
-        (json!({"used_percentage":12}), "Context 12% used [", "]"),
-        (
-            json!({"context_window_size":0}),
-            "Context awaiting usage",
-            "",
-        ),
+        (json!({"used_percentage":12}), "CTX 12% used [", "]"),
+        (json!({"context_window_size":0}), "CTX awaiting usage", ""),
     ] {
         let text = screen(json!({"usage":{"context":context}}));
         let row = text.split('\n').nth(1).unwrap();
@@ -228,7 +224,7 @@ fn context_and_empty_weekly_bars_share_their_labels_foreground() {
     assert_eq!(
         colored,
         [
-            ("Context 25% used ", "#5F8787"),
+            ("CTX 25% used ", "#5F8787"),
             ("[█████░░░░░░░░░░░░░░░]", "#5F8787"),
             ("7D 0% left ", "#E05252"),
             ("[░░░░░░░░░░░░░░░░░░░░]", "#E05252"),

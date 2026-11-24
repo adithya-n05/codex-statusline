@@ -381,7 +381,7 @@ fn idle_resume_restores_the_recorded_context_before_the_first_turn() {
     };
     let idle = read("a", "new-model", json!({}));
     assert!(
-        idle.contains("Context 50% used") && !idle.contains("258400"),
+        idle.contains("CTX 50% used") && !idle.contains("258400"),
         "{idle}"
     );
     assert!(
@@ -390,12 +390,12 @@ fn idle_resume_restores_the_recorded_context_before_the_first_turn() {
             "new-model",
             json!({"used_percentage":61,"context_window_size":258400})
         )
-        .contains("Context 61% used")
+        .contains("CTX 61% used")
     );
     for (id, model) in [("b", "new-model"), ("a", "other")] {
         let row = read(id, model, json!({}));
         assert!(
-            row.contains("Context awaiting usage") && !row.contains("258400"),
+            row.contains("CTX awaiting usage") && !row.contains("258400"),
             "{row}"
         );
     }
@@ -487,23 +487,21 @@ fn a_resumed_chat_recovers_recorded_usage_after_diagnostic_logs_rotate() {
         .to_string()
     };
     observations(&path, &[model.clone(), usage.clone()]);
-    assert!(read("test-model", json!({})).contains("Context 50% used"));
-    assert!(read("test-model", json!({"used_percentage":70})).contains("Context 70% used"));
-    assert!(!read("other", json!({})).contains("Context 50% used"));
-    assert!(
-        !read("test-model", json!({"context_window_size":800000})).contains("Context 50% used")
-    );
+    assert!(read("test-model", json!({})).contains("CTX 50% used"));
+    assert!(read("test-model", json!({"used_percentage":70})).contains("CTX 70% used"));
+    assert!(!read("other", json!({})).contains("CTX 50% used"));
+    assert!(!read("test-model", json!({"context_window_size":800000})).contains("CTX 50% used"));
     for end in [
         json!({"type":"compacted","payload":{}}),
         json!({"type":"turn_context","payload":{"model":"other"}}),
     ] {
         observations(&path, &[model.clone(), usage.clone(), end]);
-        assert!(!read("test-model", json!({})).contains("Context 50% used"));
+        assert!(!read("test-model", json!({})).contains("CTX 50% used"));
     }
     let mut f = fs::File::create(&path).unwrap();
     writeln!(f, "{}", "x".repeat(600_000)).unwrap();
     writeln!(f, "{model}\n{usage}").unwrap();
-    assert!(read("test-model", json!({})).contains("Context 50% used"));
+    assert!(read("test-model", json!({})).contains("CTX 50% used"));
 }
 #[test]
 fn the_first_footer_read_restores_speed_from_a_recent_response_in_a_large_chat() {

@@ -10,11 +10,11 @@ pub fn context(value: &Value, compaction_pressure: Option<f64>) -> Vec<Value> {
     let mut line = Vec::new();
     if let Some(pct) = percent {
         let pct = pct.clamp(0., 100.);
-        line.push(json!(format!("Context {pct:.0}% used ")));
+        line.push(json!(format!("CTX {pct:.0}% used ")));
         // Reserve red for a measured compaction limit; the host percentage can use a different denominator.
         line.push(gauge(pct, compaction_pressure.unwrap_or(pct.min(89.))));
     } else {
-        line.push(json!("Context awaiting usage"));
+        line.push(json!("CTX awaiting usage"));
     }
 
     line
