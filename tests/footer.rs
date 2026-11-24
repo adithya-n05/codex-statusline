@@ -28,7 +28,7 @@ fn activity_distinguishes_totals_categories_failures_and_session_details() {
     let tree = footer(
         "Dir",
         vec![],
-        "Tools 31 · Shell 20 · MCP 5 · Patch 4 · Terminal I/O 2 · Failed 3 · CLI 0.172.0 · session",
+        "Tools 38 · Shell 20 · MCP 5 · Web 6 · Patch 4 · Other 1 · Terminal I/O 2 · Failed 3 · CLI 0.172.0 · session",
     );
     let row = tree["children"].as_array().unwrap().last().unwrap();
     let colors = |word: &str| -> Option<&str> {
@@ -45,11 +45,17 @@ fn activity_distinguishes_totals_categories_failures_and_session_details() {
         })
     };
     assert_eq!(row["props"]["color"], "#969696");
-    assert_eq!(colors("Tools 31"), Some("#E78A53"));
-    assert_eq!(colors("MCP"), Some("#E78A53"));
-    assert_eq!(colors("5"), Some("#FBCB97"));
-    assert_eq!(colors("Shell"), Some("#C1C1C1"));
-    assert_eq!(colors("20"), Some("#FBCB97"));
-    assert_eq!(colors("Terminal I/O"), Some("#C1C1C1"));
+    assert_eq!(colors("Tools 38"), Some("#E78A53"));
+    for (label, count) in [
+        ("Shell", "20"),
+        ("MCP", "5"),
+        ("Web", "6"),
+        ("Patch", "4"),
+        ("Other", "1"),
+        ("Terminal I/O", "2"),
+    ] {
+        assert_eq!(colors(label), Some("#C1C1C1"), "{label}");
+        assert_eq!(colors(count), Some("#FBCB97"), "{count}");
+    }
     assert_eq!(colors("Failed 3"), Some("#CC7373"));
 }

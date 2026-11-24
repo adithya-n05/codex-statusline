@@ -95,8 +95,7 @@ fn activity_line(last: &str) -> serde_json::Value {
             Some(("Tools", _)) => spans.push(painted(field, "#E78A53")),
             Some(("Failed", _)) => spans.push(painted(field, "#CC7373")),
             Some((label, count)) if label != "CLI" && count.parse::<usize>().is_ok() => {
-                let accent = if label == "MCP" { "#E78A53" } else { "#C1C1C1" };
-                spans.push(painted(label, accent));
+                spans.push(painted(label, "#C1C1C1"));
                 spans.push(json!("\u{a0}"));
                 spans.push(painted(count, "#FBCB97"));
             }
