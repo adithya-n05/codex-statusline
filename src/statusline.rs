@@ -129,7 +129,7 @@ pub fn render_enriched(
     middle.extend(weekly);
     for (label, color) in [
         (identity.label(), "#E78A53"),
-        (extra.history.speed.as_deref(), "#5F8787"),
+        (extra.history.speed.as_deref(), "#FBCB97"),
     ] {
         let Some(label) = label else { continue };
         if !middle.is_empty() {

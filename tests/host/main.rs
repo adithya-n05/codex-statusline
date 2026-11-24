@@ -29,7 +29,7 @@ fn main() {
                 for (word, rgb) in [
                     ("~/work", (251, 203, 151)),
                     ("API key", (231, 138, 83)),
-                    ("CLI ", (95, 135, 135)),
+                    ("CLI ", (150, 150, 150)),
                 ] {
                     assert_eq!(
                         tty.foreground(word),
