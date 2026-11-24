@@ -77,3 +77,25 @@ fn tool_activity_counts_completed_operations_once_and_keeps_failures_visible() {
         Some("Tools 5 · Shell 1 · MCP 1 · Web 1 · Patch 1 · Other 1 · Failed 2")
     );
 }
+#[test]
+fn tool_activity_includes_completed_codex_extensions() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("extensions.jsonl");
+    let mut f = fs::File::create(&path).unwrap();
+    for (id, kind) in [
+        ("1", "web.search"),
+        ("2", "clock.sleep"),
+        ("3", "future.tool"),
+        ("1", "web.search"),
+    ] {
+        writeln!(f,"{}",json!({"type":"event_msg","payload":{"type":"item_completed","item":{"type":"Extension","kind":kind,"id":id}}})).unwrap();
+    }
+    assert_eq!(
+        History::default()
+            .read(&path)
+            .unwrap()
+            .tools_label()
+            .as_deref(),
+        Some("Tools 3 · Web 1 · Other 2")
+    );
+}

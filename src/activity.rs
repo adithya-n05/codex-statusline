@@ -14,6 +14,8 @@ impl Activity {
             "McpToolCall" => 1,
             "WebSearch" | "WebSearchCall" => 2,
             "FileChange" => 3,
+            "Extension" if item["kind"].as_str().is_some_and(|v| v.starts_with("web.")) => 2,
+            "Extension" => 4,
             name if name.ends_with("ToolCall")
                 || matches!(name, "ImageGeneration" | "ImageView" | "CodeMode") =>
             {
