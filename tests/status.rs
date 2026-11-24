@@ -47,3 +47,17 @@ fn new_models_and_effort_levels_are_read_from_the_snapshot() {
         );
     }
 }
+#[test]
+fn permission_scope_and_approval_policy_remain_independent() {
+    for (scope, policy) in [
+        ("Full access", "never"),
+        ("Read only", "never"),
+        ("Workspace write", "on-request"),
+    ] {
+        let thread = json!({"workspace":{"cwd":"Dir"},"permissions":{"display_name":scope},"approval":{"policy":policy}});
+        assert_eq!(
+            screen(thread).lines().next().unwrap(),
+            format!("Dir · {scope} · Approvals {policy}")
+        );
+    }
+}

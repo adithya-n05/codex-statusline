@@ -26,5 +26,15 @@ pub fn render(state: &Value) -> Value {
         );
         first.extend(model["reasoning_level"].as_str().filter(|s| !s.is_empty()));
     }
+    first.extend(
+        thread
+            .get("permissions")
+            .and_then(|p| p["display_name"].as_str()),
+    );
+    let approval = thread
+        .get("approval")
+        .and_then(|a| a["policy"].as_str())
+        .map(|p| format!("Approvals {p}"));
+    first.extend(approval.as_deref());
     footer(&first.join(" · "), Vec::new(), "")
 }
