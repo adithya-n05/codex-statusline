@@ -3,7 +3,9 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 fn exchange(lines: &[&str]) -> Vec<Value> {
+    let home = tempfile::tempdir().unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_codex-statusline"))
+        .env("CODEX_HOME", home.path())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()

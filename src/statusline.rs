@@ -2,6 +2,10 @@ use crate::layout::footer;
 use serde_json::Value;
 
 pub fn render(state: &Value) -> Value {
+    render_for(state, &crate::account::Identity::Unknown)
+}
+
+pub fn render_for(state: &Value, identity: &crate::account::Identity) -> Value {
     let Some(thread) = state["thread"].as_object() else {
         return Value::Null;
     };
@@ -45,10 +49,20 @@ pub fn render(state: &Value) -> Value {
         .collect::<Vec<_>>()
         .join(" · ");
     let mut middle = crate::usage::context(&state["thread"]["usage"]["context"], None);
-    let weekly = crate::usage::weekly(&state["account"], crate::usage::unix_now());
+    let weekly = if matches!(identity, crate::account::Identity::Api) {
+        vec![]
+    } else {
+        crate::usage::weekly(&state["account"], crate::usage::unix_now())
+    };
     if !middle.is_empty() && !weekly.is_empty() {
         middle.push(serde_json::json!(" · "));
     }
     middle.extend(weekly);
+    if let Some(label) = identity.label() {
+        if !middle.is_empty() {
+            middle.push(serde_json::json!(" · "));
+        }
+        middle.push(serde_json::json!(label));
+    }
     footer(&first.join(" · "), middle, &last)
 }
