@@ -14,7 +14,7 @@ Codex CLI 0.172.0 gives the footer three rows in a tall window when shortcut hin
 
 ## Development
 
-Use Rust stable, Make, and Codex CLI on your path. CI runs on macOS with Codex CLI 0.172.0. Install the coverage tools once with these commands.
+Use Rust stable and Codex CLI. CI runs on macOS with Codex CLI 0.172.0. Install the coverage tools once with these commands.
 
 ```sh
 rustup component add llvm-tools-preview
@@ -23,9 +23,11 @@ cargo install cargo-llvm-cov --version 0.9.2 --locked
 
 | Command | What it does |
 | --- | --- |
-| `make test` | Run the full workspace suite and report every failing target. |
-| `make check` | Check formatting, run Clippy and the tests, then measure line coverage. |
-| `make build` | Build the release binary at `target/release/codex-statusline` using the lockfile. |
+| `cargo test --workspace --locked --no-fail-fast` | Run the full workspace suite and report every failing target. |
+| `cargo fmt --all --check` | Check formatting. |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` | Lint the workspace and its tests. |
+| `cargo coverage` | Measure line coverage and enforce the 90% minimum. |
+| `cargo build --release --locked` | Build `target/release/codex-statusline`. |
 
 Develop one behavior per cycle. Begin with a failing test, run the full suite before and after the change, then commit and push. Coverage must reach 90% across the workspace and in each measured Rust source file.
 
