@@ -39,6 +39,10 @@ fn main() {
                 }
                 Ok(())
             }),
+            Trial::test("standard_shortcuts_work_on_start_and_resume", || {
+                standard_shortcuts_work_on_start_and_resume();
+                Ok(())
+            }),
             Trial::test("installed_provider_populates_a_fresh_chat", || {
                 installed_provider_populates_a_fresh_chat();
                 Ok(())
@@ -144,4 +148,37 @@ fn installed_provider_populates_a_fresh_chat() {
         },
         "real provider rendering in a fresh Codex chat",
     );
+}
+fn standard_shortcuts_work_on_start_and_resume() {
+    fn exercise(t: &mut terminal::Terminal) {
+        let hints = |lines: &[String]| {
+            lines
+                .iter()
+                .any(|r| r.contains("← for agents") && r.contains("? for shortcuts"))
+        };
+        t.wait(hints, "idle shortcut hints");
+        t.send(b"?");
+        t.wait(
+            |rows| rows.iter().any(|r| r.contains("Keyboard shortcuts")),
+            "shortcut help opens",
+        );
+        t.send(b"\x1b");
+        t.wait(hints, "idle hints after closing help");
+        t.send(b"\x1b[D");
+        t.wait(
+            |rows| rows.iter().any(|r| r.contains("Agent command center")),
+            "agent picker opens",
+        );
+    }
+    let mut tty = terminal::Terminal::start_provider(180);
+    exercise(&mut tty);
+    drop(tty);
+    let mut original = terminal::Terminal::start_provider(180);
+    original.wait(
+        |r| r.iter().any(|s| s.contains("API key")),
+        "provider ready before saving the fixture",
+    );
+    original.persist();
+    let mut resumed = original.resume(180);
+    exercise(&mut resumed);
 }

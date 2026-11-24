@@ -25,7 +25,7 @@ pub struct Terminal {
     remaining: Vec<(&'static [u8], &'static [u8])>,
     child: Box<dyn Child + Send + Sync>,
     pty: Box<dyn MasterPty + Send>,
-    _root: TempDir,
+    root: std::sync::Arc<TempDir>,
 }
 
 impl Terminal {
@@ -36,6 +36,13 @@ impl Terminal {
         Self::with_command(width, provider, Vec::new())
     }
     pub fn open_side_chat(&mut self) {
+        self.persist();
+        self.send(b"/side\r");
+    }
+    pub fn send(&mut self, bytes: &[u8]) {
+        self.input.write_all(bytes).unwrap();
+    }
+    pub fn persist(&mut self) {
         // A local shell turn persists the parent thread without a model request.
         self.input
             .write_all(b"!printf '%s%s' fixture ready\r")
@@ -44,7 +51,6 @@ impl Terminal {
             |rows| rows.iter().any(|s| s.contains("fixtureready")),
             "persisted parent thread",
         );
-        self.input.write_all(b"/side\r").unwrap();
     }
     pub fn foreground(&self, word: &str) -> Option<vt100::Color> {
         let screen = self.parser.screen();
@@ -119,6 +125,17 @@ args = {}
             json!(arguments)
         );
         fs::write(home.join("config.toml"), config).unwrap();
+        Self::launch(width, std::sync::Arc::new(root), false)
+    }
+    pub fn resume(self, width: u16) -> Self {
+        let root = self.root.clone();
+        drop(self);
+        Self::launch(width, root, true)
+    }
+    fn launch(width: u16, root: std::sync::Arc<TempDir>, resume: bool) -> Self {
+        let base = root.path().canonicalize().unwrap();
+        let home = base.join("codex");
+        let cwd = base.join("work");
         let mut cmd = CommandBuilder::new("codex");
         cmd.env_clear();
         for (key, value) in [("HOME", &base), ("TMPDIR", &base), ("CODEX_HOME", &home)] {
@@ -131,6 +148,9 @@ args = {}
         cmd.env("XDG_CACHE_HOME", base.join("cache"));
         cmd.args(["--no-daemon", "-C"]);
         cmd.arg(&cwd);
+        if resume {
+            cmd.args(["resume", "--last"]);
+        }
         cmd.cwd(&cwd);
         let pty = native_pty_system()
             .openpty(PtySize {
@@ -160,7 +180,7 @@ args = {}
             remaining: CAPABILITIES.to_vec(),
             child,
             pty: pty.master,
-            _root: root,
+            root,
         }
     }
 
