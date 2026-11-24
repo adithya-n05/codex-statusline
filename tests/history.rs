@@ -137,3 +137,26 @@ fn abort_preserves_the_latest_generation_rate_only_for_its_own_turn() {
         assert_eq!(history.read(&path).unwrap().speed.as_deref(), want);
     }
 }
+#[test]
+fn distinct_shell_launches_and_terminal_interactions_are_counted_separately() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("calls.jsonl");
+    let mut f = fs::File::create(&path).unwrap();
+    for (id, source, status) in [
+        ("c1", "unified_exec_startup", "completed"),
+        ("p1", "unified_exec_interaction", "completed"),
+        ("p1", "unified_exec_interaction", "completed"),
+        ("c2", "unified_exec_startup", "failed"),
+        ("c2", "unified_exec_startup", "failed"),
+    ] {
+        writeln!(f,"{}",json!({"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":id,"process_id":"42","source":source,"status":status}}})).unwrap();
+    }
+    writeln!(f,"{}",json!({"type":"event_msg","payload":{"type":"item_completed","item":{"type":"McpToolCall","id":"m1","status":"completed"}}})).unwrap();
+    let mut history = History::default();
+    for _ in 0..2 {
+        assert_eq!(
+            history.read(&path).unwrap().tools_label().as_deref(),
+            Some("Tools 4 · Shell 2 · MCP 1 · Terminal I/O 1 · Failed 1")
+        );
+    }
+}

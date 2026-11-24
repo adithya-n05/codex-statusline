@@ -3,13 +3,14 @@ use std::collections::HashSet;
 
 #[derive(Clone, Default)]
 pub struct Activity {
-    counts: [usize; 5],
+    counts: [usize; 6],
     failed: usize,
 }
 
 impl Activity {
     pub fn record(&mut self, item: &Value, seen: &mut HashSet<String>) {
         let index = match item["type"].as_str().unwrap_or("") {
+            "CommandExecution" if item["source"] == "unified_exec_interaction" => 5,
             "CommandExecution" => 0,
             "McpToolCall" => 1,
             "WebSearch" | "WebSearchCall" => 2,
@@ -40,7 +41,7 @@ impl Activity {
     }
     pub fn label(&self) -> String {
         let mut fields = vec![format!("Tools {}", self.counts.iter().sum::<usize>())];
-        for (name, n) in ["Shell", "MCP", "Web", "Patch", "Other"]
+        for (name, n) in ["Shell", "MCP", "Web", "Patch", "Other", "Terminal I/O"]
             .into_iter()
             .zip(self.counts)
         {
