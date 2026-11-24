@@ -29,6 +29,17 @@ pub struct Terminal {
 }
 
 impl Terminal {
+    pub fn open_side_chat(&mut self) {
+        // A local shell turn persists the parent thread without a model request.
+        self.input
+            .write_all(b"!printf '%s%s' fixture ready\r")
+            .unwrap();
+        self.wait(
+            |rows| rows.iter().any(|s| s.contains("fixtureready")),
+            "persisted parent thread",
+        );
+        self.input.write_all(b"/side\r").unwrap();
+    }
     pub fn resize(&mut self, width: u16) {
         self.parser.screen_mut().set_size(ROWS, width);
         self.pty

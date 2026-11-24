@@ -28,6 +28,10 @@ fn main() {
                 outer_rows_clip_after_resize();
                 Ok(())
             }),
+            Trial::test("usage_wraps_only_in_the_narrow_pane", || {
+                usage_wraps_only_in_the_narrow_pane();
+                Ok(())
+            }),
         ],
     )
     .exit();
@@ -77,5 +81,30 @@ fn outer_rows_clip_after_resize() {
                 .any(|s| s[0].contains("plan 3/5") && s[2].contains("456789abcdef"))
         },
         "restored footer on widening",
+    );
+}
+fn usage_wraps_only_in_the_narrow_pane() {
+    let middle = "CTX [██████████░░░░░░░░░░] 50% / 258k · 7D 70% left · ChatGPT · Last 81 tok/s";
+    let mut tty = terminal::Terminal::start(160, ["Project dir", middle, "Tools · CLI"]);
+    tty.wait(
+        |l| l.iter().any(|s| s.contains(middle)),
+        "complete usage in wide main chat",
+    );
+    tty.open_side_chat();
+    tty.wait(
+        |lines| {
+            lines.windows(3).any(|rows| {
+                let panes: Vec<_> = rows.iter().filter_map(|s| s.split_once('│')).collect();
+                panes.len() == 3
+                    && panes[0].0.contains("Project dir")
+                    && panes[0].1.contains("Project dir")
+                    && panes[1].0.contains(middle)
+                    && panes[1].1.trim_start().starts_with("CTX")
+                    && panes[2].0.contains("Tools · CLI")
+                    && panes[2].1.contains("81 tok/s")
+                    && !panes[2].1.contains("Tools")
+            })
+        },
+        "side chat usage continues on row three while main chat keeps tools",
     );
 }
