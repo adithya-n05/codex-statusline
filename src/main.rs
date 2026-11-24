@@ -16,6 +16,16 @@ fn main() -> io::Result<ExitCode> {
                 codex_statusline::account::Identity::ChatGpt(id) => id.clone(),
                 _ => None,
             };
+            let mut active_credits =
+                home.as_deref()
+                    .zip(account_id.as_deref())
+                    .and_then(|(h, id)| {
+                        codex_statusline::credits::Standing::active(
+                            h,
+                            id,
+                            codex_statusline::usage::unix_now(),
+                        )
+                    });
             let mut ledger = codex_statusline::credits::Ledger::default();
             let mut worker = codex_statusline::runtime::Worker::new(move |state| {
                 let cwd = state
@@ -65,7 +75,13 @@ fn main() -> io::Result<ExitCode> {
                 }
             });
             protocol::serve(io::stdin().lock(), io::stdout().lock(), |s| {
-                statusline::render_enriched(s, &identity, &worker.latest(s))
+                let mut extra = worker.latest(s);
+                if let Some(fresh) = &extra.credits {
+                    active_credits = Some(fresh.clone());
+                } else {
+                    extra.credits = active_credits.clone();
+                }
+                statusline::render_enriched(s, &identity, &extra)
             })?;
             Ok(ExitCode::SUCCESS)
         }

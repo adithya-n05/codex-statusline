@@ -324,3 +324,43 @@ fn alternating_reset_seconds_keep_the_same_credit_balance_and_weekly_baseline() 
             .contains("Credits 60000")
     );
 }
+#[test]
+fn spent_credits_survive_cold_start_missing_limits_and_a_slow_thread_refresh() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    account(home.path(), "fixture-account");
+    let now = codex_statusline::usage::unix_now();
+    let reset = now + 6500;
+    let db = Connection::open_in_memory().unwrap();
+    let at = |offset: i64| {
+        db.query_row("SELECT datetime(?1,'unixepoch')", [now + offset], |r| {
+            r.get::<_, String>(0)
+        })
+        .unwrap()
+    };
+    observations(
+        &path,
+        &[
+            credit_event(&at(-10), reset, "500"),
+            credit_event(&at(-1), reset, "450"),
+        ],
+    );
+    rendered(home.path(), credit_state(reset), "Tools");
+    for state in [credit_state(reset + 1), json!({"thread":{"id":"new"}})] {
+        let first = rendered(home.path(), state, "").to_string();
+        assert!(first.contains("Credits 450 / 500"), "{first}");
+    }
+    for state in [credit_state(reset + 604800), credit_state(now - 1)] {
+        assert!(
+            !rendered(home.path(), state, "")
+                .to_string()
+                .contains("Credits 450")
+        );
+    }
+    account(home.path(), "different-account");
+    assert!(
+        !rendered(home.path(), credit_state(reset), "")
+            .to_string()
+            .contains("Credits 450")
+    );
+}

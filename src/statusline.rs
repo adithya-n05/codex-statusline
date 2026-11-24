@@ -93,19 +93,18 @@ pub fn render_enriched(
     let now = crate::usage::unix_now();
     let live_reset =
         crate::usage::weekly_window(&state["account"]).and_then(|w| w["resets_at"].as_i64());
-    let weekly = if matches!(identity, crate::account::Identity::Api) {
-        crate::usage::api_thread(&state["thread"]["usage"])
-    } else {
-        if let Some(credit) = extra
-            .credits
-            .as_ref()
-            .filter(|c| live_reset.is_some_and(|r| r > now && c.matches_reset(r)))
-        {
-            credit.render(now)
+    let weekly =
+        if matches!(identity, crate::account::Identity::Api) {
+            crate::usage::api_thread(&state["thread"]["usage"])
         } else {
-            crate::usage::weekly(&state["account"], now)
-        }
-    };
+            if let Some(credit) = extra.credits.as_ref().filter(|c| {
+                c.reset > now && live_reset.is_none_or(|r| r > now && c.matches_reset(r))
+            }) {
+                credit.render(now)
+            } else {
+                crate::usage::weekly(&state["account"], now)
+            }
+        };
     if !middle.is_empty() && !weekly.is_empty() {
         middle.push(serde_json::json!(" · "));
     }
