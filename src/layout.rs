@@ -2,6 +2,7 @@ use unicode_linebreak::linebreaks;
 use unicode_segmentation::UnicodeSegmentation;
 
 const LIMIT: usize = 8192;
+const DIVIDER_COLOR: &str = "#969696";
 
 /// Codex wraps text leaves at Unicode break opportunities and ASCII word hyphens.
 /// Keep outer rows indivisible so the renderer clips them at each pane's own edge.
@@ -36,7 +37,7 @@ pub(crate) fn header(fields: &[(&str, &str)]) -> serde_json::Value {
     let mut parts = Vec::new();
     for (i, &(text, color)) in fields.iter().enumerate() {
         if i != 0 {
-            parts.push(("\u{a0}·\u{a0}".to_owned(), "#969696"));
+            parts.push(("\u{a0}·\u{a0}".to_owned(), DIVIDER_COLOR));
         }
         parts.push((fixed_line(text), color));
     }
@@ -79,7 +80,7 @@ pub(crate) fn assemble_footer(
     let mut children = vec![first, json!("\n")];
     children.extend(middle);
     children.extend([json!("\n"), activity_line(last)]);
-    json!({"type":"text","props":{"color":"#FBCB97"},"children":children})
+    json!({"type":"text","props":{"color":DIVIDER_COLOR},"children":children})
 }
 fn activity_line(last: &str) -> serde_json::Value {
     use serde_json::json;
@@ -102,7 +103,7 @@ fn activity_line(last: &str) -> serde_json::Value {
             _ => spans.push(json!(field)),
         }
     }
-    json!({"type":"text","props":{"color":"#969696"},"children":spans})
+    json!({"type":"text","props":{"color":DIVIDER_COLOR},"children":spans})
 }
 pub fn gauge(filled_percent: f64, pressure_percent: f64) -> serde_json::Value {
     let percent = filled_percent.clamp(0., 100.);

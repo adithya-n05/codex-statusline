@@ -11,7 +11,7 @@ fn only_the_middle_row_has_breakable_text() {
     );
     assert_eq!(
         tree,
-        json!({"type":"text","props":{"color":"#FBCB97"},"children":["one\u{a0}two","\n",styled," and more","\n",{"type":"text","props":{"color":"#969696"},"children":["three\u{a0}four"]}]})
+        json!({"type":"text","props":{"color":"#969696"},"children":["one\u{a0}two","\n",styled," and more","\n",{"type":"text","props":{"color":"#969696"},"children":["three\u{a0}four"]}]})
     );
 }
 

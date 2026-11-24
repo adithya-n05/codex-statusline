@@ -278,3 +278,39 @@ fn the_first_row_colors_each_field_by_its_role() {
         );
     }
 }
+
+#[test]
+fn field_dividers_have_one_foreground_across_all_three_rows_and_account_modes() {
+    use codex_statusline::{account::Identity, runtime::Extra, statusline::render_enriched};
+    let state = json!({"app":{"cli_version":"v1"},"thread":{"id":"session","name":"Title","workspace":{"cwd":"Dir"},
+        "model":{"id":"model","reasoning_level":"high"},"usage":{"context":{"used_percentage":30},
+        "total":{"total_input_tokens":45,"output_tokens":12},"cost":{"total_cost_usd":0.05}}},
+        "account":{"rate_limits":[{"limit_id":"codex","secondary_limit":{"window_minutes":10080,"used_percent":55,"resets_at":1}}]}});
+    let mut extra = Extra::default();
+    extra.history.speed = Some("Last 50 tok/s".into());
+    fn check(node: &Value, inherited: &str, counts: &mut Vec<usize>) {
+        let hue = node
+            .pointer("/props/color")
+            .and_then(Value::as_str)
+            .unwrap_or(inherited);
+        if let Some(s) = node.as_str() {
+            if s == "\n" {
+                counts.push(0);
+            }
+            for _ in s.matches('·') {
+                assert_eq!(hue, "#969696", "{s}");
+                *counts.last_mut().unwrap() += 1;
+            }
+        } else if let Some(children) = node["children"].as_array() {
+            for child in children {
+                check(child, hue, counts);
+            }
+        }
+    }
+    for account in [Identity::Api, Identity::ChatGpt(None)] {
+        let tree = render_enriched(&state, &account, &extra);
+        let mut counts = vec![0];
+        check(&tree, "", &mut counts);
+        assert_eq!(counts, [3, 4, 1]);
+    }
+}
