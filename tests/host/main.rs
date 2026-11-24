@@ -43,6 +43,13 @@ fn main() {
                 standard_shortcuts_work_on_start_and_resume();
                 Ok(())
             }),
+            Trial::test(
+                "exact_fit_usage_has_no_ellipsis_and_real_overflow_does",
+                || {
+                    exact_fit_usage_has_no_ellipsis_and_real_overflow_does();
+                    Ok(())
+                },
+            ),
             Trial::test("installed_provider_populates_a_fresh_chat", || {
                 installed_provider_populates_a_fresh_chat();
                 Ok(())
@@ -181,4 +188,58 @@ fn standard_shortcuts_work_on_start_and_resume() {
     original.persist();
     let mut resumed = original.resume(180);
     exercise(&mut resumed);
+}
+fn exact_fit_usage_has_no_ellipsis_and_real_overflow_does() {
+    let width = 60;
+    let content = std::cell::Cell::new(0);
+    {
+        let mut calibration =
+            terminal::Terminal::start(width, [&"q".repeat(120), "usage", "tools"]);
+        calibration.wait(
+            |rows| {
+                rows.iter().any(|r| {
+                    let row = r.trim();
+                    if row.starts_with("qq") && row.ends_with('…') {
+                        content.set(row.chars().count());
+                        true
+                    } else {
+                        false
+                    }
+                })
+            },
+            "usable pane width",
+        );
+    }
+    let span = content.get();
+    let first = "A".repeat(span);
+    let second = format!("{} END", "B".repeat(span - 4));
+    let usage = format!("{first} {second}");
+    let mut tty = terminal::Terminal::start(width, ["Dir", &usage, ""]);
+    tty.wait(
+        |r| {
+            r.windows(3)
+                .any(|w| w[0].trim() == "Dir" && w[1].trim() == first && w[2].trim() == second)
+        },
+        "fully visible final field at exact fit",
+    );
+    tty.resize(width - 1);
+    tty.wait(
+        |r| {
+            r.windows(3).any(|w| {
+                w[0].trim() == "Dir"
+                    && w[2].contains("BBB")
+                    && w[2].trim_end().ends_with('…')
+                    && !w[2].contains("END")
+            })
+        },
+        "ellipsis only when the final field falls outside the viewport",
+    );
+    tty.resize(width);
+    tty.wait(
+        |r| {
+            r.windows(3)
+                .any(|w| w[0].trim() == "Dir" && w[2].trim() == second)
+        },
+        "restored final field after widening",
+    );
 }
