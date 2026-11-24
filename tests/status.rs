@@ -28,3 +28,22 @@ fn actual_chat_title_follows_the_directory_and_can_be_absent() {
         assert_eq!(value.lines().next().unwrap(), expected);
     }
 }
+#[test]
+fn new_models_and_effort_levels_are_read_from_the_snapshot() {
+    for (model, expected) in [
+        (
+            json!({"display_name":"Future Model","id":"future-8","reasoning_level":"ultra"}),
+            "Dir · Future Model · ultra",
+        ),
+        (json!({"id":"custom-123"}), "Dir · custom-123"),
+        (json!({}), "Dir"),
+    ] {
+        assert_eq!(
+            screen(json!({"workspace":{"cwd":"Dir"},"model":model}))
+                .lines()
+                .next()
+                .unwrap(),
+            expected
+        );
+    }
+}

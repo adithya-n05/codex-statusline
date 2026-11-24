@@ -17,5 +17,14 @@ pub fn render(state: &Value) -> Value {
     {
         first.push(name);
     }
+    if let Some(model) = thread.get("model") {
+        first.extend(
+            model["display_name"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .or_else(|| model["id"].as_str()),
+        );
+        first.extend(model["reasoning_level"].as_str().filter(|s| !s.is_empty()));
+    }
     footer(&first.join(" · "), Vec::new(), "")
 }
