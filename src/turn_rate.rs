@@ -205,6 +205,18 @@ impl TurnRate {
             seconds.checked_mul(1000)
         });
     }
+    pub fn read_stream(&mut self, home: &std::path::Path, thread: &str) {
+        if !self.finished
+            && let Some(turn) = self.id.as_deref()
+            && let Some(after) = self.report_ms.or(self.started_ms)
+            && let Some((item, at, bytes)) =
+                crate::stream_text::pending_text(home, thread, turn, after)
+        {
+            // This copy belongs to a single footer read. A saved item or usage
+            // report replaces the provisional bytes on the next read.
+            self.visible.entry(item).or_insert((at, bytes));
+        }
+    }
     pub fn label(&self, thread: &Value, now_ms: i64, last: Option<&str>) -> Option<String> {
         if self.finished {
             if let Some(elapsed) = self.finished_elapsed_ms.filter(|ms| *ms > 0) {

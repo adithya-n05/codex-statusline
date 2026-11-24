@@ -329,3 +329,77 @@ fn ending_a_turn_preserves_its_estimate_including_unreported_generated_input() {
         );
     }
 }
+
+#[test]
+fn streamed_text_changes_the_first_response_rate_before_rollout_usage_arrives() {
+    let mut chat = Chat::open();
+    let db = Connection::open(chat._home.path().join("logs_2.sqlite")).unwrap();
+    db.execute_batch("CREATE TABLE logs(id INTEGER PRIMARY KEY,ts INTEGER,ts_nanos INTEGER,thread_id TEXT,process_uuid TEXT,target TEXT,feedback_log_body TEXT)").unwrap();
+    let start = chat.start;
+    let add = |process: &str, owner: Option<&str>, offset: i64, target: &str, body: &str| {
+        db.execute("INSERT INTO logs(ts,ts_nanos,thread_id,process_uuid,target,feedback_log_body) VALUES(?1,0,?2,?3,?4,?5)",
+            rusqlite::params![start+offset,owner,process,target,body]).unwrap();
+    };
+    let marker = "codex_core::stream_events_utils";
+    let notify = "codex_app_server::outgoing_message";
+    let markdown = "codex_tui::markdown_stream";
+    let mark = |turn: &str| {
+        format!(
+            "run{{turn_id={turn} model=test}}: Output item item_type=\"message\" item_id=\"msg1\""
+        )
+    };
+    let chunk = |proc: &str, offset: i64, body: &str| {
+        add(
+            proc,
+            None,
+            offset,
+            notify,
+            "app-server event: item/agentMessage/delta targeted_connections=1",
+        );
+        add(
+            proc,
+            None,
+            offset,
+            markdown,
+            &format!("push_delta: {}", json!(body)),
+        );
+    };
+    fn check(row: String, low: f64, high: f64) {
+        let n = row
+            .split("Turn est. ")
+            .nth(1)
+            .unwrap()
+            .split_whitespace()
+            .next()
+            .unwrap()
+            .parse::<f64>()
+            .unwrap();
+        assert!((low..=high).contains(&n), "{row}");
+    }
+    add("p", Some("chat"), 1, marker, &mark("other"));
+    chunk("p", 2, &"y".repeat(8000));
+    check(chat.row(), 0.0, 0.0);
+    add("p", Some("chat"), 4, marker, &mark("turn"));
+    chunk("other-process", 5, &"y".repeat(8000));
+    check(chat.row(), 0.0, 0.0);
+    chunk("p", 6, &"\n".repeat(2000));
+    check(chat.row(), 4.7, 5.1);
+    chunk("p", 7, &"é".repeat(1000));
+    check(chat.row(), 9.5, 10.1);
+    chat.append(json!({"timestamp":chat.stamp(8),"type":"event_msg","payload":{"type":"item_completed","turn_id":"turn","item":{"type":"AgentMessage","id":"msg1","content":[{"type":"Text","text":"a".repeat(4000)}]}}}));
+    check(chat.row(), 9.5, 10.1);
+    chat.append(chat.report(9, 600, 600));
+    check(chat.row(), 5.7, 6.1);
+    add(
+        "p",
+        Some("chat"),
+        10,
+        marker,
+        &mark("turn").replace("msg1", "msg2"),
+    );
+    chunk("p", 11, &"x".repeat(4000));
+    check(chat.row(), 15.0, 16.1);
+    add("p", Some("side"), 12, marker, &mark("side"));
+    chunk("p", 13, &"y".repeat(8000));
+    check(chat.row(), 5.7, 6.1);
+}

@@ -13,6 +13,7 @@ pub mod saved_context;
 mod speed;
 pub mod statusline;
 pub mod storage;
+mod stream_text;
 mod turn_rate;
 pub mod usage;
 pub mod weekly;
