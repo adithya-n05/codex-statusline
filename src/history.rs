@@ -157,6 +157,7 @@ impl Metrics {
 /// Read the latest measurements independently of the background Git and activity scan.
 #[derive(Default)]
 pub struct RecentHistory {
+    context_base: Option<u64>,
     snapshot: Option<(PathBuf, u64, Option<std::time::SystemTime>, Metrics)>,
     tool_tail: ToolTail,
 }
@@ -183,18 +184,35 @@ impl RecentHistory {
         self.read_with(path, |_| {})
     }
     pub fn read_with(&mut self, path: &Path, observe: impl FnMut(&Value)) -> Option<&Metrics> {
+        self.read_after(path, None, observe)
+    }
+    pub fn read_after(
+        &mut self,
+        path: &Path,
+        baseline: Option<&Metrics>,
+        observe: impl FnMut(&Value),
+    ) -> Option<&Metrics> {
         let file = File::open(path).ok()?;
         let metadata = file.metadata().ok()?;
         let length = metadata.len();
         let modified = metadata.modified().ok();
+        let id = file_id(&metadata);
+        let base = baseline.and_then(|m| {
+            let (original, end) = m.tool_position?;
+            (length > TAIL_BYTES && original == id && (length - TAIL_BYTES..=length).contains(&end))
+                .then_some((end, &m.context))
+        });
+        let context_base = base.map(|(end, _)| end);
         if !self.snapshot.as_ref().is_some_and(|(prev, size, time, _)| {
             prev == path
-                && self.tool_tail.file_id == file_id(&metadata)
+                && self.tool_tail.file_id == id
+                && self.context_base == context_base
                 && *size == length
                 && modified.is_some()
                 && *time == modified
         }) {
-            let (data, tail) = recent(file, file_id(&metadata), length, observe)?;
+            let (data, tail) = recent(file, id, length, base, observe)?;
+            self.context_base = context_base;
             self.tool_tail = tail;
             self.snapshot = Some((path.to_owned(), length, modified, data));
         }
@@ -209,15 +227,17 @@ struct ToolTail {
     calls: Vec<(u64, crate::activity::Call)>,
 }
 
+const TAIL_BYTES: u64 = 512 * 1024;
+
 /// A large chat can still supply its latest measurements in one native footer read.
 fn recent(
     mut file: File,
     id: u64,
     length: u64,
+    base: Option<(u64, &crate::saved_context::SavedContext)>,
     mut observe: impl FnMut(&Value),
 ) -> Option<(Metrics, ToolTail)> {
-    const BYTES: u64 = 512 * 1024;
-    let offset = length.saturating_sub(BYTES);
+    let offset = length.saturating_sub(TAIL_BYTES);
     file.seek(SeekFrom::Start(offset)).ok()?;
     let mut reader = BufReader::new(file.take(length - offset));
     let start = if offset == 0 {
@@ -232,6 +252,12 @@ fn recent(
         calls: vec![],
     };
     let mut result = Metrics::default();
+    let context_offset = if let Some((end, context)) = base.filter(|(end, _)| *end >= start) {
+        result.context = context.clone();
+        end
+    } else {
+        start
+    };
     let mut turns = crate::speed::Turns::recent(offset > 0);
     let mut bytes = Vec::new();
     loop {
@@ -246,7 +272,9 @@ fn recent(
                 tail.calls.push((tail.end, call));
             }
             observe(&event);
-            result.context.observe(&event);
+            if tail.end > context_offset {
+                result.context.observe(&event);
+            }
             result.turn_rate.observe(&event);
             turns.observe(&event, &mut result.speed);
         }

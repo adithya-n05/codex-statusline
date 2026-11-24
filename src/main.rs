@@ -103,12 +103,13 @@ fn main() -> io::Result<ExitCode> {
                 if let Some(home) = local_home.as_deref()
                     && let Some(id) = t["id"].as_str()
                     && let Some(path) = codex_statusline::storage::rollout(home, id)
-                    && let Some(recent) = recent_history.read_with(&path, |event| {
-                        if owns_rollout {
-                            live_ledger.observe(event);
-                            weekly.observe(event);
-                        }
-                    })
+                    && let Some(recent) =
+                        recent_history.read_after(&path, Some(&extra.history), |event| {
+                            if owns_rollout {
+                                live_ledger.observe(event);
+                                weekly.observe(event);
+                            }
+                        })
                 {
                     if awaiting_worker
                         || (native_context_missing

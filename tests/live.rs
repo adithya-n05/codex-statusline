@@ -1203,3 +1203,41 @@ fn tool_starts_and_failures_reach_the_next_read_once_even_in_a_large_chat() {
         assert!(session.poll(&state).contains("Tools 0"));
     }
 }
+
+#[test]
+fn context_updates_in_a_long_turn_whose_model_and_window_are_outside_the_tail() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let mut f = fs::File::create(&path).unwrap();
+    for record in [
+        json!({"type":"turn_context","payload":{"model":"m"}}),
+        json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"long","model_context_window":112000}}),
+        json!({"type":"event_msg","payload":{"type":"token_count","info":{"model_context_window":112000,"total_token_usage":{"output_tokens":200},"last_token_usage":{"total_tokens":24000}}}}),
+        json!({"type":"event_msg","payload":{"type":"plan_update","plan":[{"status":"completed"}]}}),
+        json!({"padding":"a".repeat(600000)}),
+    ] {
+        writeln!(f, "{record}").unwrap();
+    }
+    let state = json!({"thread":{"id":"a","model":{"id":"m"},"usage":{"context":{"context_window_size":112000,"used_tokens":24000,"used_percentage":12},"total":{"output_tokens":200}}}});
+    let mut session = provider::Provider::open(home.path());
+    let deadline = Instant::now() + Duration::from_secs(4);
+    while !session.poll(&state).contains("Plan 1/1") {
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(10));
+    }
+    for (turn, tokens, expected) in [
+        ("stale", 100000, 12),
+        ("long", 75000, 63),
+        ("long", 78000, 66),
+    ] {
+        writeln!(f,"{}",json!({"type":"token_usage_record","payload":{"thread_id":"a","turn_id":turn,"usage":{"total_tokens":tokens}}})).unwrap();
+        assert!(
+            session
+                .poll(&state)
+                .contains(&format!("CTX {expected}% used"))
+        );
+    }
+    fs::rename(&path, home.path().join("old.jsonl")).unwrap();
+    fs::write(&path, "{}\n").unwrap();
+    assert!(session.poll(&state).contains("CTX 12% used"));
+}
