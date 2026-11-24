@@ -253,14 +253,14 @@ fn spent_credits_replace_the_weekly_gauge_until_that_same_reset() {
     observations(&path, &[at(100000, "31000"), at(60000, "46500")]);
     let usage = run(state.clone());
     assert!(
-        usage.contains("Credits 31000 / 62000 · 50% left [██████████░░░░░░░░░░] · reset"),
+        usage.contains("Credits 31,000 / 62,000 · 50% left [██████████░░░░░░░░░░] · reset"),
         "{usage}"
     );
     assert!(!usage.contains("7D ") && !usage.contains('≈'));
     observations(&path, &[at(105000, "33000")]);
-    assert!(run(state.clone()).contains("Credits 33000 / 64000"));
+    assert!(run(state.clone()).contains("Credits 33,000 / 64,000"));
     observations(&path, &[at(106000, "0")]);
-    assert!(run(state.clone()).contains("Credits 0 / 64000 · 0% left"));
+    assert!(run(state.clone()).contains("Credits 0 / 64,000 · 0% left"));
     assert!(run(credit_state(reset + 604800)).contains("7D 18% left"));
     assert!(run(credit_state(now - 1)).contains("7D 18% left"));
     account(home.path(), "second-account");
@@ -315,13 +315,13 @@ fn alternating_reset_seconds_keep_the_same_credit_balance_and_weekly_baseline() 
         let mut state = credit_state(live);
         state["account"]["rate_limits"][0]["primary_limit"]["used_percent"] = json!(100);
         let row = rendered(home.path(), state, "Tools").to_string();
-        assert!(row.contains("Credits 60000 / 62000"), "{row}");
+        assert!(row.contains("Credits 60,000 / 62,000"), "{row}");
         assert!(!row.contains("7D 0% left"));
     }
     assert!(
         !rendered(home.path(), credit_state(reset + 604800), "Tools")
             .to_string()
-            .contains("Credits 60000")
+            .contains("Credits 60,000")
     );
 }
 #[test]
@@ -400,4 +400,31 @@ fn idle_resume_restores_the_recorded_context_before_the_first_turn() {
         );
     }
     assert!(!read("a", "new-model", json!({"context_window_size":800000})).contains("258400"));
+}
+#[test]
+fn whole_credit_labels_preserve_fractional_bar_math() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    account(home.path(), "fixture-account");
+    let now = codex_statusline::usage::unix_now();
+    let reset = now + 600;
+    let db = Connection::open_in_memory().unwrap();
+    let at = |offset: i64| {
+        db.query_row("SELECT datetime(?1,'unixepoch')", [now + offset], |r| {
+            r.get::<_, String>(0)
+        })
+        .unwrap()
+    };
+    observations(
+        &path,
+        &[
+            credit_event(&at(-10), reset, "1.49"),
+            credit_event(&at(-5), reset, "0.75"),
+        ],
+    );
+    assert!(
+        rendered(home.path(), credit_state(reset), "Tools")
+            .to_string()
+            .contains("Credits 1 / 1 · 50% left")
+    );
 }

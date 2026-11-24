@@ -163,6 +163,13 @@ impl Standing {
     }
 }
 fn amount(value: f64) -> String {
-    let s = format!("{value:.6}");
-    s.trim_end_matches('0').trim_end_matches('.').to_owned()
+    let digits = format!("{:.0}", value.round());
+    let mut label = String::new();
+    for (i, ch) in digits.char_indices() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            label.push(',');
+        }
+        label.push(ch);
+    }
+    label
 }
