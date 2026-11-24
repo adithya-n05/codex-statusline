@@ -467,19 +467,19 @@ fn generation_speed_updates_between_model_responses_without_charging_tool_waits(
         observations(&path, events);
         rendered(home.path(), state.clone(), "Tools").to_string()
     };
-    assert!(read(&events).contains("Live 100 tok/s"));
+    assert!(read(&events).contains("Latest 100 tok/s"));
     events.push(event("2025-01-01T00:00:52Z",json!({"type":"item_completed","turn_id":"one","started_at_ms":1735689602000u64,"item":{"type":"CommandExecution","id":"cmd"}})));
     events.push(output("other", 1735689602000));
     events.push(output("one", 1735689652000));
     events.push(count("2025-01-01T00:00:52Z", 200, 200));
     events.push(count("2025-01-01T00:00:53.500Z", 425, 225));
-    assert!(read(&events).contains("Live 150 tok/s"));
+    assert!(read(&events).contains("Latest 150 tok/s"));
     events.push(event(
         "2025-01-01T00:01:00Z",
         json!({"type":"task_complete","turn_id":"one","duration_ms":60000}),
     ));
     let idle = read(&events);
-    assert!(idle.contains("Last 150 tok/s") && !idle.contains("Live "));
+    assert!(idle.contains("Last 150 tok/s") && !idle.contains("Latest "));
 }
 #[test]
 fn a_resumed_chat_recovers_recorded_usage_after_diagnostic_logs_rotate() {
@@ -599,13 +599,13 @@ fn throughput_uses_the_response_usage_record_before_a_blocking_tool_returns() {
             assert!(tree.to_string().contains(expected), "{tree}");
         }
     };
-    check(&events, "Live 100 tok/s");
+    check(&events, "Latest 100 tok/s");
     events.extend([
         start(1735689605000), first,
         json!({"timestamp":"2025-01-01T00:01:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"output_tokens":400},"last_token_usage":{"output_tokens":200}}}}),
         usage("t","2025-01-01T00:00:06Z",450,50),
     ]);
-    check(&events, "Live 50 tok/s");
+    check(&events, "Latest 50 tok/s");
     events.push(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"t","duration_ms":60000}}));
     check(&events, "Last 50 tok/s");
 }
@@ -640,7 +640,7 @@ fn each_footer_poll_picks_up_a_new_rate_even_with_cached_tool_counts() {
     let deadline = Instant::now() + Duration::from_secs(3);
     loop {
         let first = poll("a");
-        if first.contains("Tools") && first.contains("Live 50 tok/s") {
+        if first.contains("Tools") && first.contains("Latest 50 tok/s") {
             break;
         }
         assert!(Instant::now() < deadline);
@@ -649,7 +649,7 @@ fn each_footer_poll_picks_up_a_new_rate_even_with_cached_tool_counts() {
     write_event(start(1735689602000));
     write_event(usage("2025-01-01T00:00:03Z", 125, 225));
     let next = poll("a");
-    assert!(next.contains("Live 125 tok/s"), "{next}");
+    assert!(next.contains("Latest 125 tok/s"), "{next}");
     assert!(!poll("another").contains("tok/s"));
     write_event(
         json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"t","duration_ms":10000}}),

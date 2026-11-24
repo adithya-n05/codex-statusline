@@ -47,7 +47,7 @@ The provider keeps timestamped balance observations for the signed in account un
 
 **API usage.** A chat using an API key shows its reported input and output tokens and the CLI’s dollar estimate when available. That estimate covers the thread. Codex supplies the pricing data. Usage across every chat or the whole API key requires separate billing access.
 
-**Output speed.** `Live` updates when Codex records the output token count for a model response during the turn. The rate uses the elapsed time from the first recorded output item in that response, so a shell command between responses doesn’t slow down the reading. `Last` keeps the most recent rate after the turn ends. For older chats that only record whole turn timing, the rate includes time spent waiting for tools.
+**Output speed.** `Latest` shows the latest measured response rate during a turn. Codex CLI 0.172.0 reads the footer about once a second. The number changes on the next read after Codex records a response’s token count. A long response can stream text for several seconds before that count arrives. The rate uses the elapsed time from the first recorded output item in that response, so a shell command between responses doesn’t slow down the reading. `Last` keeps the most recent rate after the turn ends. For older chats that only record whole turn timing, the rate includes time spent waiting for tools.
 
 **Tool activity.** A batch of three shell requests adds three to both `Tools` and `Shell`. Start and completion records with the same request ID count once. Terminal input and polls appear under `Terminal I/O`. A failed request stays in its category and also counts toward `Failed`.
 

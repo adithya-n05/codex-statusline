@@ -129,7 +129,7 @@ impl Turns {
         if let Some(rate) = rate {
             self.output_started_ms = None;
             self.last_response_rate = Some(rate);
-            *last = Some(format!("Live {rate:.0} tok/s"));
+            *last = Some(format!("Latest {rate:.0} tok/s"));
             return true;
         }
         false

@@ -113,11 +113,11 @@ fn abort_preserves_the_latest_generation_rate_only_for_its_own_turn() {
         ),
         (
             json!({"type":"token_count","info":{"total_token_usage":{"output_tokens":42},"last_token_usage":{"output_tokens":42}}}),
-            Some("Live 42 tok/s"),
+            Some("Latest 42 tok/s"),
         ),
         (
             json!({"type":"turn_aborted","turn_id":"stale"}),
-            Some("Live 42 tok/s"),
+            Some("Latest 42 tok/s"),
         ),
         (
             json!({"type":"turn_aborted","turn_id":"a"}),
