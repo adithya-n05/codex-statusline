@@ -3,6 +3,7 @@ mod activity;
 pub mod compaction;
 pub mod credits;
 mod first_prompt;
+mod generated_call;
 pub mod git;
 pub mod history;
 pub mod layout;

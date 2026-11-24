@@ -11,6 +11,7 @@ pub(crate) struct TurnRate {
     finished: bool,
     report_ms: Option<i64>,
     visible: HashMap<String, (i64, u64)>,
+    calls: HashMap<String, (i64, u64)>,
 }
 
 impl TurnRate {
@@ -37,6 +38,21 @@ impl TurnRate {
                     && (self.id.is_none() || self.id.as_deref() == turn) =>
             {
                 self.visible_item(record)
+            }
+            (Some("response_item"), _) if !self.finished => {
+                if let Some(call) = crate::generated_call::GeneratedCall::parse(record)
+                    && let Some(turn) = call.turn.or(self.id.as_deref())
+                    && self.id.as_deref().is_none_or(|active| active == turn)
+                    && let Some(at) = crate::speed::timestamp_ms(&record["timestamp"])
+                    && self.started_ms.is_none_or(|start| at >= start)
+                {
+                    if self.id.is_none() {
+                        self.id = Some(turn.to_owned());
+                    }
+                    self.calls
+                        .entry(call.id.to_owned())
+                        .or_insert((at, call.bytes));
+                }
             }
             (Some("token_usage_record"), _)
                 if turn.is_some() && (self.id.is_none() || self.id.as_deref() == turn) =>
@@ -123,6 +139,9 @@ impl TurnRate {
             self.visible.retain(|_, (ms, _)| *ms > at);
         } else {
             self.visible.clear();
+            for (_, bytes) in self.calls.values_mut() {
+                *bytes = 0;
+            }
         }
     }
     pub fn merge_recent(&mut self, recent: &Self) {
@@ -135,6 +154,9 @@ impl TurnRate {
             self.finished |= recent.finished;
             self.report_ms = self.report_ms.max(recent.report_ms);
             self.visible.extend(recent.visible.clone());
+            for (id, sample) in &recent.calls {
+                self.calls.entry(id.clone()).or_insert(*sample);
+            }
             if let Some(at) = self.report_ms {
                 self.visible.retain(|_, (ms, _)| *ms > at);
             }
@@ -177,6 +199,11 @@ impl TurnRate {
         } else {
             self.visible
                 .values()
+                .chain(
+                    self.calls
+                        .values()
+                        .filter(|(at, _)| self.report_ms.is_none_or(|report| *at > report)),
+                )
                 .map(|(_, bytes)| *bytes)
                 .sum::<u64>()
                 .div_ceil(4)
