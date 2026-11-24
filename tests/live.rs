@@ -289,3 +289,38 @@ fn missing_chat_names_use_only_the_saved_name_of_the_displayed_thread() {
     db.execute("UPDATE threads SET name='  '", []).unwrap();
     assert_eq!(first(Value::Null), "Dir");
 }
+#[test]
+fn alternating_reset_seconds_keep_the_same_credit_balance_and_weekly_baseline() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    account(home.path(), "fixture-account");
+    let now = codex_statusline::usage::unix_now();
+    let reset = now + 6500;
+    let db = Connection::open_in_memory().unwrap();
+    let date = |offset: i64| {
+        db.query_row("SELECT datetime(?1,'unixepoch')", [now + offset], |r| {
+            r.get::<_, String>(0)
+        })
+        .unwrap()
+    };
+    observations(
+        &path,
+        &[
+            credit_event(&date(-3600), reset, "62000"),
+            credit_event(&date(-900), reset + 1, "61400"),
+            credit_event(&date(-60), reset, "60000"),
+        ],
+    );
+    for live in [reset + 1, reset, reset + 1, reset - 1] {
+        let mut state = credit_state(live);
+        state["account"]["rate_limits"][0]["primary_limit"]["used_percent"] = json!(100);
+        let row = rendered(home.path(), state, "Tools").to_string();
+        assert!(row.contains("Credits 60000 / 62000"), "{row}");
+        assert!(!row.contains("7D 0% left"));
+    }
+    assert!(
+        !rendered(home.path(), credit_state(reset + 604800), "Tools")
+            .to_string()
+            .contains("Credits 60000")
+    );
+}

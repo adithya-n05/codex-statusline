@@ -83,7 +83,12 @@ pub struct Standing {
     balance: f64,
     base: f64,
 }
+// The CLI derives its reset timestamp from a rounded seconds-until-reset value.
+const RESET_TOLERANCE_SECONDS: i64 = 2;
 impl Standing {
+    pub fn matches_reset(&self, live: i64) -> bool {
+        self.reset.abs_diff(live) <= RESET_TOLERANCE_SECONDS as u64
+    }
     pub fn read(home: &Path, account: &str, reset: i64) -> Option<Self> {
         let db = Connection::open_with_flags(
             home.join("codex-statusline/credits.sqlite3"),
@@ -92,10 +97,17 @@ impl Standing {
         .ok()?;
         // Reconstruct in observation order so replaying another chat cannot invent a top up.
         let mut query = db
-            .prepare("SELECT balance FROM observations WHERE account=?1 AND reset=?2 ORDER BY at")
+            .prepare("SELECT balance FROM observations WHERE account=?1 AND reset BETWEEN ?2 AND ?3 ORDER BY at, reset")
             .ok()?;
         let mut rows = query
-            .query_map(params![account, reset], |r| r.get::<_, f64>(0))
+            .query_map(
+                params![
+                    account,
+                    reset.saturating_sub(RESET_TOLERANCE_SECONDS),
+                    reset.saturating_add(RESET_TOLERANCE_SECONDS)
+                ],
+                |r| r.get::<_, f64>(0),
+            )
             .ok()?;
         let mut balance = rows.next()?.ok()?;
         let mut base = balance;

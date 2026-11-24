@@ -99,7 +99,7 @@ pub fn render_enriched(
         if let Some(credit) = extra
             .credits
             .as_ref()
-            .filter(|c| Some(c.reset) == live_reset && c.reset > now)
+            .filter(|c| live_reset.is_some_and(|r| r > now && c.matches_reset(r)))
         {
             credit.render(now)
         } else {
