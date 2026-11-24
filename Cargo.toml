@@ -7,6 +7,7 @@ repository = "https://github.com/adithya-n05/codex-statusline"
 publish = false
 
 [dependencies]
+rusqlite = "0.37"
 serde_json = "1"
 unicode-linebreak = "0.1"
 unicode-segmentation = "1"

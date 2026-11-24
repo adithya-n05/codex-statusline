@@ -4,4 +4,5 @@ pub mod layout;
 pub mod protocol;
 pub mod runtime;
 pub mod statusline;
+pub mod storage;
 pub mod usage;
