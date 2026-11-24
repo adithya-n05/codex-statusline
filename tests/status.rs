@@ -186,7 +186,8 @@ fn the_compaction_warning_requires_a_known_threshold() {
 #[test]
 fn active_service_tier_follows_effort_and_precedes_permissions() {
     for (raw, display, want) in [
-        ("normal", "", "Normal"),
+        ("normal", "", "Normal speed"),
+        ("normal", "Normal", "Normal speed"),
         ("priority", "", "Fast"),
         ("fast", "Fast", "Fast"),
         ("ultrafast", "Ultrafast", "Ultrafast"),

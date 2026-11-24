@@ -60,7 +60,13 @@ pub fn render_enriched(
                     other => other,
                 })
             });
-        first.extend(tier);
+        first.extend(tier.map(|name| {
+            if name.eq_ignore_ascii_case("normal") {
+                "Normal speed"
+            } else {
+                name
+            }
+        }));
     }
     first.extend(
         thread
