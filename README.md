@@ -8,11 +8,11 @@ Codex Statusline shows the current chat, Git changes, and usage in three rows be
 
 | Row | Contents | When space runs out |
 | --- | --- | --- |
-| 1 | Directory, chat title, model, reasoning effort, permissions, Git changes, then plan progress | Truncate at the right edge. |
-| 2 | Context usage and window size, weekly allowance (`7D`) or credits, account, then the last turn's token speed | Continue onto row three. |
+| 1 | Directory, chat title, model, reasoning effort, service tier (`Standard`, `Fast`, or `Ultrafast`), permissions, Git changes, then plan progress | Truncate at the right edge. |
+| 2 | Context used, weekly allowance (`7D`) or credits, account, then output speed | Continue onto row three. |
 | 3 | Tool activity, CLI version, and session ID | Truncate at the right edge. When usage wraps, its continuation takes this row. |
 
-Codex CLI 0.172.0 gives the footer three rows in a tall window when shortcut hints are visible. A side chat gets its own, narrower column. The terminal tests use both panes to check what fits.
+Codex CLI 0.172.0 gives the footer three rows in a tall window when shortcut hints are visible. A side chat gets its own, narrower column. Text that fits exactly stays visible. Codex adds an ellipsis when text extends past the edge or a wrapped usage row hides the tools row below it. The CLI version and session ID come last on row three. Codex sets their position in each pane.
 
 ## Install in Codex CLI
 
@@ -39,15 +39,17 @@ Codex starts the Rust executable over standard input and output. The provider re
 
 ## Reading the gauges
 
-**Context.** The percentage and window size come from the current chat. The bar changes from Bathory blue to peach at 50% of the measured compaction limit, orange at 75%, and red at 90%. Its fill still shows the CLI’s context usage. When Codex has yet to report a matching limit for the current thread, model, and window, the colors follow context usage up to orange. A CLI update that changes the diagnostic format can also make the threshold unavailable.
+**Context.** `Context 56% used` means the chat has used 56% of its effective context window. On resume, the footer can recover the last measurement for the same thread and model before the next turn. A fresh chat needs its first usage measurement. The bar changes from Bathory blue to peach at 50% of the measured compaction limit, orange at 75%, and red at 90%. Its fill still shows the CLI’s context usage. When Codex has yet to report a matching limit for the current thread, model, and window, the colors follow context usage up to orange. A CLI update that changes the diagnostic format can also make the threshold unavailable.
 
-**Weekly usage and credits.** `7D` shows the weekly allowance remaining and the time until Codex’s reported reset. Once an observed balance falls, credits take its place until that same reset. A week that opens at 60,000 credits and receives 2,000 more has a base of 62,000. At a balance of 31,000 the bar is half full. A later top up increases the base by the amount added.
+**Weekly usage and credits.** `7D` shows the weekly allowance remaining and the time until Codex’s reported reset. Once an observed balance falls, credits take its place until that same reset. A week that opens at 60,000 credits and receives 2,000 more has a base of 62,000. At a balance of 31,000 the segmented bar is half full. Both balances round to whole credits for display. A later top up increases the base by the amount added.
 
 The provider keeps timestamped balance observations for the signed in account under `$CODEX_HOME/codex-statusline/credits.sqlite3` (normally `~/.codex/codex-statusline/credits.sqlite3`). Chats can contribute observations in any order. If no available session recorded the balance at reset, the first observation in the window supplies the opening value. Purchases and usage that happen between two observations can only be seen as a net change.
 
 **API usage.** A chat using an API key shows its reported input and output tokens and the CLI’s dollar estimate when available. That estimate covers the thread. Codex supplies the pricing data. Usage across every chat or the whole API key requires separate billing access.
 
-**Speed and tools.** The speed at the end of row two divides the last completed turn’s output tokens by its full duration, including tool waits. Row three counts completed tool calls, with failures still included in the total. The CLI version and session ID follow the counts. Codex controls clipping and the available width in each pane.
+**Output speed.** `Live` updates when Codex records the output token count for a model response during the turn. The rate uses the elapsed time from the first recorded output item in that response, so a shell command between responses doesn’t slow down the reading. `Last` keeps the most recent rate after the turn ends. For older chats that only record whole turn timing, the rate includes time spent waiting for tools.
+
+**Tool activity.** A batch of three shell requests adds three to both `Tools` and `Shell`. Start and completion records with the same request ID count once. Terminal input and polls appear under `Terminal I/O`. A failed request stays in its category and also counts toward `Failed`.
 
 ## Development
 
