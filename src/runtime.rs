@@ -8,6 +8,7 @@ use std::{
 #[derive(Clone, Default)]
 pub struct Extra {
     pub git: Option<String>,
+    pub compaction: Option<crate::compaction::Sample>,
     pub history: crate::history::Metrics,
 }
 

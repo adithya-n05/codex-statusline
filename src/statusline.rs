@@ -62,7 +62,9 @@ pub fn render_enriched(
     .flatten()
     .collect::<Vec<_>>()
     .join(" · ");
-    let mut middle = crate::usage::context(&state["thread"]["usage"]["context"], None);
+    let context = &state["thread"]["usage"]["context"];
+    let pressure = extra.compaction.as_ref().and_then(|s| s.pressure(context));
+    let mut middle = crate::usage::context(context, pressure);
     let weekly = if matches!(identity, crate::account::Identity::Api) {
         crate::usage::api_thread(&state["thread"]["usage"])
     } else {

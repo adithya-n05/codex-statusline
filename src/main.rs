@@ -29,6 +29,9 @@ fn main() -> io::Result<ExitCode> {
                     .unwrap_or_default();
                 codex_statusline::runtime::Extra {
                     history: metrics,
+                    compaction: home.as_deref().and_then(|h| {
+                        codex_statusline::compaction::Sample::load(h, &state["thread"])
+                    }),
                     git: cwd.and_then(|p| codex_statusline::git::summary(std::path::Path::new(p))),
                 }
             });

@@ -90,3 +90,38 @@ fn last_turn_speed_uses_completed_output_and_closes_the_usage_row() {
         events.truncate(8);
     }
 }
+#[test]
+fn compaction_red_tracks_the_displayed_models_actual_scope_at_the_exact_boundary() {
+    let home = tempfile::tempdir().unwrap();
+    fs::write(index(home.path()), "").unwrap();
+    let db = Connection::open(home.path().join("logs_9.sqlite")).unwrap();
+    db.execute_batch("CREATE TABLE logs(id INTEGER PRIMARY KEY,thread_id TEXT,target TEXT,feedback_log_body TEXT);").unwrap();
+    let insert = |id: &str, model: &str, scope: &str, pressure: u64, limit: u64, window: u64| {
+        let body = format!(
+            "span model={model} effort=xhigh}}: post sampling token usage total_usage_tokens=66 auto_compact_scope_tokens={pressure} auto_compact_scope_limit=Some({limit}) auto_compact_limit_scope={scope} full_context_window_limit=Some({window})"
+        );
+        db.execute("INSERT INTO logs(thread_id,target,feedback_log_body) VALUES(?1,'codex_core::session::turn',?2)",[id,&body]).unwrap();
+    };
+    insert("a", "future-model", "Total", 0, 500, 1000);
+    insert("other", "future-model", "Total", 80, 100, 1000);
+    let color = |model: &str, n: u64, window: u64| {
+        let state = json!({"thread":{"id":"a","workspace":{"cwd":home.path()},"model":{"id":model},"usage":{"context":{"used_tokens":n,"context_window_size":window}}}});
+        rendered(home.path(), state, "Tools")["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find_map(|c| c.pointer("/props/color").and_then(Value::as_str))
+            .unwrap()
+            .to_owned()
+    };
+    assert_eq!(color("future-model", 449, 1000), "#E78A53");
+    assert_eq!(color("future-model", 450, 1000), "#E05252");
+    assert_eq!(color("different-model", 450, 1000), "#5F8787");
+    assert_eq!(color("future-model", 450, 2000), "#5F8787");
+    insert("a", "future-model", "Window", 90, 100, 1000);
+    assert_eq!(color("future-model", 66, 1000), "#E05252");
+    insert("a", "future-model", "Window", 89, 100, 1000);
+    assert_eq!(color("future-model", 66, 1000), "#E78A53");
+    insert("a", "future-model", "Window", 100, 0, 1000);
+    assert_eq!(color("future-model", 66, 1000), "#5F8787");
+}

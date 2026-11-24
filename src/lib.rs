@@ -1,5 +1,6 @@
 pub mod account;
 mod activity;
+pub mod compaction;
 pub mod git;
 pub mod history;
 pub mod layout;
