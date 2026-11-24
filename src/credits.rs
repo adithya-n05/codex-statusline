@@ -151,7 +151,7 @@ impl Standing {
         let remaining = (100. * self.balance / self.base).clamp(0., 100.);
         vec![
             serde_json::json!(format!(
-                "CRDTS {} / {} · {remaining:.0}% left ",
+                "CRDTS {} / {} {remaining:.0}% left ",
                 amount(self.balance),
                 amount(self.base)
             )),

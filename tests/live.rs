@@ -262,14 +262,14 @@ fn spent_credits_replace_the_weekly_gauge_until_that_same_reset() {
     observations(&path, &[at(100000, "31000"), at(60000, "46500")]);
     let usage = run(state.clone());
     assert!(
-        usage.contains("CRDTS 31,000 / 62,000 · 50% left [██████████░░░░░░░░░░] · reset"),
+        usage.contains("CRDTS 31,000 / 62,000 50% left [██████████░░░░░░░░░░] · reset"),
         "{usage}"
     );
     assert!(!usage.contains("WKLY ") && !usage.contains('≈'));
     observations(&path, &[at(105000, "33000")]);
     assert!(run(state.clone()).contains("CRDTS 33,000 / 64,000"));
     observations(&path, &[at(106000, "0")]);
-    assert!(run(state.clone()).contains("CRDTS 0 / 64,000 · 0% left"));
+    assert!(run(state.clone()).contains("CRDTS 0 / 64,000 0% left"));
     assert!(run(credit_state(reset + 604800)).contains("WKLY 18% left"));
     assert!(run(credit_state(now - 1)).contains("WKLY 18% left"));
     account(home.path(), "second-account");
@@ -434,7 +434,7 @@ fn whole_credit_labels_preserve_fractional_bar_math() {
     assert!(
         rendered(home.path(), credit_state(reset), "Tools")
             .to_string()
-            .contains("CRDTS 1 / 1 · 50% left")
+            .contains("CRDTS 1 / 1 50% left")
     );
 }
 #[test]
