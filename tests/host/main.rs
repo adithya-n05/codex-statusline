@@ -20,6 +20,10 @@ fn main() {
     libtest_mimic::run(
         &Arguments::from_args(),
         vec![
+            Trial::test("installed_provider_populates_a_fresh_chat", || {
+                installed_provider_populates_a_fresh_chat();
+                Ok(())
+            }),
             Trial::test("native_footer_geometry", || {
                 native_footer_geometry();
                 Ok(())
@@ -106,5 +110,19 @@ fn usage_wraps_only_in_the_narrow_pane() {
             })
         },
         "side chat usage continues on row three while main chat keeps tools",
+    );
+}
+fn installed_provider_populates_a_fresh_chat() {
+    let mut terminal = terminal::Terminal::start_provider(180);
+    terminal.wait(
+        |lines| {
+            lines.windows(3).any(|r| {
+                r[0].contains("work")
+                    && r[0].contains("Approvals")
+                    && r[1].contains("API key")
+                    && r[2].contains("CLI ")
+            })
+        },
+        "real provider rendering in a fresh Codex chat",
     );
 }

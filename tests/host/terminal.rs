@@ -29,6 +29,12 @@ pub struct Terminal {
 }
 
 impl Terminal {
+    pub fn start_provider(width: u16) -> Self {
+        let provider = env::var_os("CODEX_STATUSLINE_TEST_PROVIDER")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| env!("CARGO_BIN_EXE_codex-statusline").into());
+        Self::with_command(width, provider, Vec::new())
+    }
     pub fn open_side_chat(&mut self) {
         // A local shell turn persists the parent thread without a model request.
         self.input
@@ -51,6 +57,13 @@ impl Terminal {
             .unwrap();
     }
     pub fn start(width: u16, rows: [&str; 3]) -> Self {
+        Self::with_command(
+            width,
+            env::current_exe().unwrap(),
+            vec!["--serve-rows".into(), json!(rows).to_string()],
+        )
+    }
+    fn with_command(width: u16, provider: std::path::PathBuf, arguments: Vec<String>) -> Self {
         let root = tempfile::tempdir().unwrap();
         let base = root.path().canonicalize().unwrap();
         let home = base.join("codex");
@@ -81,12 +94,13 @@ sidebar_width_percent = 31
 disable_paste_burst = true
 status_line_provider = {{ server = "geometry", tool = "footer" }}
 [mcp_servers.geometry]
+env_vars = ["CODEX_HOME"]
 command = {}
 args = {}
 "#,
             json!(cwd),
-            json!(env::current_exe().unwrap()),
-            json!(["--serve-rows".to_string(), json!(rows).to_string()])
+            json!(provider),
+            json!(arguments)
         );
         fs::write(home.join("config.toml"), config).unwrap();
         let mut cmd = CommandBuilder::new("codex");
