@@ -106,7 +106,11 @@ pub fn render_enriched(
         .history
         .context
         .restore(&state["thread"]["model"]["id"], live);
-    let context = recorded.as_ref().unwrap_or(live);
+    let context = extra
+        .measured_context
+        .as_ref()
+        .or(recorded.as_ref())
+        .unwrap_or(live);
     let recovered = extra.compaction.as_ref().map(|sample| {
         if context["estimated"].is_boolean() {
             let measured = sample.restore(live);

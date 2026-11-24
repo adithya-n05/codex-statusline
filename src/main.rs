@@ -56,6 +56,7 @@ fn main() -> io::Result<ExitCode> {
                         .zip(thread_id)
                         .and_then(|(h, id)| codex_statusline::storage::saved_name(h, id)),
                     credits: None,
+                    measured_context: None,
                     compaction: home.as_deref().and_then(|h| {
                         codex_statusline::compaction::Sample::load(h, &state["thread"])
                     }),
@@ -115,6 +116,7 @@ fn main() -> io::Result<ExitCode> {
                     {
                         extra.history.context = recent.context.clone();
                     }
+                    extra.measured_context = recent.context.ahead_of_snapshot(t);
                     extra.history.merge_recent_speed(recent, home, id);
                 }
                 if let Some((home, account)) = local_home.as_deref().zip(live_account.as_deref()) {

@@ -1034,3 +1034,52 @@ fn new_account_balances_reach_open_footers_on_the_very_next_read() {
         );
     }
 }
+
+#[test]
+fn context_uses_newer_session_measurements_while_the_host_snapshot_catches_up() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let mut session = provider::Provider::open(home.path());
+    let state = |used: u64, pct: u64, output: u64, model: &str| {
+        json!({"thread":{"id":"a","model":{"id":model},
+        "usage":{"context":{"context_window_size":112000,"used_tokens":used,"used_percentage":pct},"total":{"output_tokens":output}}}})
+    };
+    let count = |used, total| json!({"type":"event_msg","payload":{"type":"token_count","info":{"model_context_window":112000,"last_token_usage":{"total_tokens":used},"total_token_usage":{"output_tokens":total}}}});
+    let report = |id: &str, used| json!({"type":"token_usage_record","payload":{"thread_id":"a","turn_id":id,"usage":{"total_tokens":used},"thread_token_usage":{"output_tokens":999999}}});
+    let mut f = fs::File::create(&path).unwrap();
+    for e in [
+        json!({"type":"turn_context","payload":{"model":"m"}}),
+        count(24000, 300),
+        json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"two","model_context_window":112000}}),
+    ] {
+        writeln!(f, "{e}").unwrap();
+    }
+    let native = state(24000, 12, 300, "m");
+    assert!(session.poll(&native).contains("CTX 12% used"));
+    writeln!(f, "{}", report("other", 92000)).unwrap();
+    assert!(session.poll(&native).contains("CTX 12% used"));
+    writeln!(f, "{}", report("two", 77000)).unwrap();
+    assert!(session.poll(&native).contains("CTX 65% used"));
+    assert!(
+        session
+            .poll(&state(83000, 71, 700, "m"))
+            .contains("CTX 71% used")
+    );
+    writeln!(f, "{}", count(77000, 500)).unwrap();
+    assert!(session.poll(&native).contains("CTX 65% used"));
+    assert!(
+        session
+            .poll(&state(24000, 12, 300, "new-model"))
+            .contains("CTX 12% used")
+    );
+    let mut switched = native.clone();
+    switched["thread"]["usage"]["context"]["context_window_size"] = json!(224000);
+    assert!(session.poll(&switched).contains("CTX 12% used"));
+    writeln!(
+        f,
+        "{}",
+        json!({"type":"event_msg","payload":{"type":"context_compacted"}})
+    )
+    .unwrap();
+    assert!(session.poll(&native).contains("CTX 12% used"));
+}
