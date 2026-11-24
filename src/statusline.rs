@@ -48,6 +48,19 @@ pub fn render_enriched(
                 .or_else(|| model["id"].as_str()),
         );
         first.extend(model["reasoning_level"].as_str().filter(|s| !s.is_empty()));
+        let tier = model["service_tier_display_name"]
+            .as_str()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                Some(match model["service_tier"].as_str()? {
+                    "default" | "normal" => "Normal",
+                    "priority" | "fast" => "Fast",
+                    "ultrafast" => "Ultrafast",
+                    "" => return None,
+                    other => other,
+                })
+            });
+        first.extend(tier);
     }
     first.extend(
         thread

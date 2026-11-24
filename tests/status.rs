@@ -175,3 +175,22 @@ fn the_compaction_warning_requires_a_known_threshold() {
         "#E78A53"
     );
 }
+#[test]
+fn active_service_tier_follows_effort_and_precedes_permissions() {
+    for (raw, display, want) in [
+        ("normal", "", "Normal"),
+        ("priority", "", "Fast"),
+        ("fast", "Fast", "Fast"),
+        ("ultrafast", "Ultrafast", "Ultrafast"),
+        ("custom", "Burst", "Burst"),
+        ("new-tier", "", "new-tier"),
+    ] {
+        let row = screen(
+            json!({"workspace":{"cwd":"Dir"},"model":{"id":"Test","reasoning_level":"xhigh","service_tier":raw,"service_tier_display_name":display},"permissions":{"display_name":"Full Access"}}),
+        );
+        assert_eq!(
+            row.lines().next().unwrap(),
+            format!("Dir · Test · xhigh · {want} · Full Access")
+        );
+    }
+}
