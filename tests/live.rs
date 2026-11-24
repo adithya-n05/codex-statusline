@@ -807,3 +807,81 @@ fn active_turn_speed_uses_confirmed_turn_tokens_and_moves_between_reports() {
     observations(&path, &events);
     assert!(rate(state("a", "thinking", 10050)).is_some_and(|r| r > 0. && r < 9.));
 }
+
+#[test]
+fn visible_output_updates_turn_speed_before_the_first_usage_report() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let started = codex_statusline::usage::unix_now() - 20;
+    let state = |output| json!({"thread":{"id":"a","agent":{"state":"thinking"},"usage":{"total":{"output_tokens":output}}}});
+    let item = |id: &str, turn: &str, ms: i64, details: Value| {
+        let mut item = details;
+        item["id"] = json!(id);
+        json!({"type":"event_msg","payload":{"type":"item_completed","turn_id":turn,"completed_at_ms":ms,"item":item}})
+    };
+    let message = |id: &str, turn: &str, ms: i64| {
+        item(
+            id,
+            turn,
+            ms,
+            json!({"type":"AgentMessage","content":[{"type":"Text","text":"a".repeat(800)}]}),
+        )
+    };
+    let at = (started + 5) * 1000;
+    let talk = message("a1", "t", at);
+    let mut events = vec![
+        json!({"type":"session_meta","payload":{"id":"a"}}),
+        json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"t","started_at":started}}),
+        item(
+            "c",
+            "t",
+            at,
+            json!({"type":"CommandExecution","output":"a".repeat(8000)}),
+        ),
+        message("alien", "other", at),
+    ];
+    let read = |events: &[Value], n: u64| {
+        observations(&path, events);
+        common::plain(&rendered(home.path(), state(n), ""))
+    };
+    let rate = |row: &str| {
+        row.split("Turn est. ")
+            .nth(1)
+            .and_then(|s| s.split_whitespace().next()?.parse::<f64>().ok())
+    };
+    assert_eq!(rate(&read(&events, 0)), None);
+    events.extend([talk.clone(), talk.clone()]);
+    let a = read(&events, 0);
+    assert!(rate(&a).is_some_and(|n| (8.5..=10.1).contains(&n)), "{a}");
+    events.push(item("r","t",at+2,json!({"type":"Reasoning","summary_text":["b".repeat(800)],"raw_content":["ignore".repeat(1000)]})));
+    let b = read(&events, 0);
+    assert!(rate(&b).is_some_and(|n| (17.0..=20.1).contains(&n)), "{b}");
+    let native = read(&events, 600);
+    assert!(
+        native.contains("Turn ") && !native.contains("est."),
+        "{native}"
+    );
+    let stamp = Connection::open_in_memory()
+        .unwrap()
+        .query_row(
+            "SELECT strftime('%Y-%m-%dT%H:%M:%SZ',?1,'unixepoch')",
+            [started + 7],
+            |r| r.get::<_, String>(0),
+        )
+        .unwrap();
+    events.push(json!({"timestamp":stamp,"type":"token_usage_record","payload":{"turn_id":"t","turn_token_usage":{"output_tokens":800},"thread_token_usage":{"output_tokens":800}}}));
+    events.push(talk);
+    let exact = read(&events, 800);
+    assert!(
+        exact.contains("Turn ") && !exact.contains("est."),
+        "{exact}"
+    );
+    events.push(message("a2", "t", at + 4000));
+    let later = read(&events, 800);
+    assert!(
+        rate(&later).is_some_and(|n| (44.0..=50.1).contains(&n)),
+        "{later}"
+    );
+    events.push(json!({"type":"event_msg","payload":{"type":"turn_aborted","turn_id":"t"}}));
+    assert_eq!(rate(&read(&events, 800)), None);
+}
