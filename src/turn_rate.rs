@@ -239,7 +239,10 @@ impl TurnRate {
             .and_then(Value::as_u64)
             .zip(self.host_baseline)
             .map_or(0, |(n, base)| n.saturating_sub(base));
-        (elapsed > 0).then(|| rate_label("Turn est.", self.tokens(native), elapsed))
+        (elapsed > 0).then(|| match self.tokens(native) {
+            0 => "Turn est. … tok/s".to_owned(),
+            tokens => rate_label("Turn est.", tokens, elapsed),
+        })
     }
     fn tokens(&self, native: u64) -> u64 {
         let estimated = if native > self.confirmed {

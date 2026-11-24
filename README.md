@@ -49,7 +49,7 @@ The provider keeps timestamped balance observations for the signed in account un
 
 **API usage.** A chat using an API key shows its reported input and output tokens and the CLI’s dollar estimate when available. That estimate covers the thread. Codex supplies the pricing data. Usage across every chat or the whole API key requires separate billing access.
 
-**Output speed.** `Turn est. 42.1 tok/s` is the turn’s output so far divided by the time since it began. Each footer read picks up streamed reply text from the terminal diagnostics when the Codex process can be tied to one chat. It also reads saved assistant text, public reasoning summaries, tool names, and tool arguments. Until Codex reports the token count, the footer estimates one token per four UTF8 bytes. Tool results add no output tokens, so the rate falls during a tool wait. Codex saves completed items in batches, and the count can jump when one arrives.
+**Output speed.** `Turn est. 42.1 tok/s` is the turn’s output so far divided by the time since it began. Each footer read picks up streamed reply text from the terminal diagnostics when the Codex process can be tied to one chat. It also reads saved assistant text, public reasoning summaries, tool names, and tool arguments. Until Codex reports the token count, the footer estimates one token per four UTF8 bytes. Before the first output is available, the footer shows `Turn est. … tok/s`. Tool results add no output tokens, so the rate falls during a tool wait. Codex batches its diagnostic writes, so a short reply can finish before the first live reading appears.
 
 Once the turn ends or you interrupt it, `Last` shows the final estimate for that turn. Older sessions with incomplete turn timing can show the last measured response rate instead.
 

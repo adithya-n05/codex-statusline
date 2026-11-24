@@ -96,7 +96,7 @@ fn generated_requests_affect_the_next_speed_read_before_usage_is_reported() {
     ] {
         chat.append(ignored);
     }
-    assert!(chat.row().contains("Turn est. 0.0 tok/s"));
+    assert!(chat.row().contains("Turn est. … tok/s"));
     chat.append(function.clone());
     chat.append(function.clone());
     let estimate = |row: &str, low, high| {
@@ -140,7 +140,7 @@ fn hosted_tool_estimates_use_only_the_recorded_request_parameters() {
         p.insert("id".into(), json!("hosted"));
         p.insert("result".into(), json!("x".repeat(20000)));
         chat.append(record.clone());
-        assert!(chat.row().contains("Turn est. 0.0 tok/s"), "{kind}");
+        assert!(chat.row().contains("Turn est. … tok/s"), "{kind}");
         record["payload"][field] = json!({"query":"é".repeat(2000)});
         chat.append(record);
         let row = chat.row();
@@ -324,7 +324,7 @@ fn ending_a_turn_preserves_its_estimate_including_unreported_generated_input() {
         chat.append(json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"new","started_at":chat.start+21}}));
         let row = chat.row();
         assert!(
-            row.contains("Turn est. 0.0 tok/s") && !row.contains("Last "),
+            row.contains("Turn est. … tok/s") && !row.contains("Last "),
             "{row}"
         );
     }
@@ -378,10 +378,10 @@ fn streamed_text_changes_the_first_response_rate_before_rollout_usage_arrives() 
     }
     add("p", Some("chat"), 1, marker, &mark("other"));
     chunk("p", 2, &"y".repeat(8000));
-    check(chat.row(), 0.0, 0.0);
+    assert!(chat.row().contains("Turn est. … tok/s"));
     add("p", Some("chat"), 4, marker, &mark("turn"));
     chunk("other-process", 5, &"y".repeat(8000));
-    check(chat.row(), 0.0, 0.0);
+    assert!(chat.row().contains("Turn est. … tok/s"));
     chunk("p", 6, &"\n".repeat(2000));
     check(chat.row(), 4.7, 5.1);
     chunk("p", 7, &"é".repeat(1000));

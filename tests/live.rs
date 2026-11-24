@@ -796,7 +796,7 @@ fn active_turn_speed_uses_confirmed_turn_tokens_and_moves_between_reports() {
             .and_then(|s| s.split_whitespace().next()?.parse::<f64>().ok())
     };
     observations(&path, &events);
-    assert_eq!(rate(state("a", "thinking", 9000)), Some(0.0));
+    assert_eq!(rate(state("a", "thinking", 9000)), None);
     events.extend([
         report("one", 1000, 10000),
         report("other", 9000, 92000),
@@ -819,7 +819,7 @@ fn active_turn_speed_uses_confirmed_turn_tokens_and_moves_between_reports() {
     assert_eq!(rate(state("a", "working", 10000)), None);
     events.push(json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"two","started_at":started+2}}));
     observations(&path, &events);
-    assert_eq!(rate(state("a", "working", 10000)), Some(0.0));
+    assert_eq!(rate(state("a", "working", 10000)), None);
     events.push(report("two", 50, 10050));
     observations(&path, &events);
     assert!(rate(state("a", "thinking", 10050)).is_some_and(|r| r > 0. && r < 9.));
@@ -866,7 +866,7 @@ fn visible_output_updates_turn_speed_before_the_first_usage_report() {
             .nth(1)
             .and_then(|s| s.split_whitespace().next()?.parse::<f64>().ok())
     };
-    assert_eq!(rate(&read(&events, 0)), Some(0.0));
+    assert_eq!(rate(&read(&events, 0)), None);
     events.extend([talk.clone(), talk.clone()]);
     let a = read(&events, 0);
     assert!(rate(&a).is_some_and(|n| (8.5..=10.1).contains(&n)), "{a}");
