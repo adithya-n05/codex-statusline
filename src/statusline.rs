@@ -50,7 +50,7 @@ pub fn render_for(state: &Value, identity: &crate::account::Identity) -> Value {
         .join(" · ");
     let mut middle = crate::usage::context(&state["thread"]["usage"]["context"], None);
     let weekly = if matches!(identity, crate::account::Identity::Api) {
-        vec![]
+        crate::usage::api_thread(&state["thread"]["usage"])
     } else {
         crate::usage::weekly(&state["account"], crate::usage::unix_now())
     };

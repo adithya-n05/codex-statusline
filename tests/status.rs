@@ -133,3 +133,16 @@ fn weekly_allowance_decreases_and_counts_down_to_the_reported_reset() {
             .starts_with("7D 0% left")
     );
 }
+#[test]
+fn api_spend_uses_cli_thread_totals_without_a_model_price_table() {
+    use codex_statusline::{account::Identity, statusline::render_for};
+    let state = json!({"thread":{"model":{"id":"future"},"usage":{
+        "total":{"total_input_tokens":13000,"output_tokens":420},"cost":{"total_cost_usd":0.12432}}}});
+    let row = plain(&render_for(&state, &Identity::Api));
+    assert!(
+        row.contains("Thread 13000 in / 420 out · est. $0.1243 · API key"),
+        "{row}"
+    );
+    assert!(!plain(&render_for(&json!({"thread":{}}), &Identity::Api)).contains('$'));
+    assert!(!plain(&render_for(&state, &Identity::ChatGpt(None))).contains('$'));
+}

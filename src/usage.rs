@@ -74,3 +74,23 @@ pub fn unix_now() -> i64 {
         .unwrap_or_default()
         .as_secs() as i64
 }
+pub fn api_thread(usage: &Value) -> Vec<Value> {
+    let mut fields = Vec::new();
+    if let (Some(input), Some(output)) = (
+        usage["total"]["total_input_tokens"].as_u64(),
+        usage["total"]["output_tokens"].as_u64(),
+    ) {
+        fields.push(format!("Thread {input} in / {output} out"));
+    }
+    if let Some(cost) = usage["cost"]["total_cost_usd"]
+        .as_f64()
+        .filter(|c| *c >= 0.)
+    {
+        fields.push(format!("est. ${cost:.4}"));
+    }
+    if fields.is_empty() {
+        vec![]
+    } else {
+        vec![json!(fields.join(" · "))]
+    }
+}
