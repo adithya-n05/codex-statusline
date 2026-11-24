@@ -14,15 +14,20 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Isolate development tools in the checkout
+        run: |
+          echo "CARGO_HOME=$PWD/.tools/cargo" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$PWD/.tools/rustup" >> "$GITHUB_ENV"
+          echo "npm_config_cache=$PWD/.tools/npm-cache" >> "$GITHUB_ENV"
+          echo "$PWD/.tools/cargo/bin" >> "$GITHUB_PATH"
       - name: Set up the Rust checks
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt,clippy,llvm-tools-preview
-          rustup default stable
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy,llvm-tools-preview --no-self-update
           cargo install cargo-llvm-cov --version 0.9.2 --locked
       - name: Install Codex for terminal tests
         run: |
-          npm install --prefix "$RUNNER_TEMP/codex-cli" @openai/codex@0.172.0
-          echo "$RUNNER_TEMP/codex-cli/node_modules/.bin" >> "$GITHUB_PATH"
+          npm install --prefix "$PWD/.tools/codex-cli" @openai/codex@0.172.0
+          echo "$PWD/.tools/codex-cli/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Verify
         run: |
           codex --version

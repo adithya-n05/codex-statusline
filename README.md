@@ -14,7 +14,14 @@ Codex CLI 0.172.0 gives the footer three rows in a tall window when shortcut hin
 
 ## Development
 
-Use Rust stable to build the project. Terminal tests also need Codex CLI on your path. CI runs on macOS with Codex CLI 0.172.0.
+Use Rust stable to build the project. Terminal tests also need Codex CLI on your path. CI runs on macOS with Codex CLI 0.172.0. From the repository root, open a development shell that keeps installed tools and dependency downloads in the ignored `.tools/` directory.
+
+```sh
+env CARGO_HOME="$PWD/.tools/cargo" RUSTUP_HOME="$PWD/.tools/rustup" \
+  PATH="$PWD/.tools/cargo/bin:$PATH" "$SHELL"
+```
+
+In that shell, run `rustup toolchain install stable --profile minimal --component rustfmt,clippy --no-self-update` on first use. Run the Cargo commands below from the same shell. Use `exit` when finished.
 
 | Command | What it does |
 | --- | --- |
@@ -29,7 +36,7 @@ Develop one behavior per cycle. Begin with a failing test, run the full suite be
 
 Contributors can run the same coverage check as CI with `cargo coverage`. It measures which Rust source lines the tests execute and requires 90% coverage overall and in each measured source file. Building and running the footer requires neither coverage tool.
 
-For a development machine that needs to measure coverage locally, install the tools once.
+To measure coverage locally, run these commands once inside the isolated development shell.
 
 ```sh
 rustup component add llvm-tools-preview
