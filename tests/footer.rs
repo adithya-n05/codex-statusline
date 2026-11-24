@@ -45,7 +45,9 @@ fn activity_distinguishes_totals_categories_failures_and_session_details() {
         })
     };
     assert_eq!(row["props"]["color"], "#969696");
-    assert_eq!(colors("Tools 31"), Some("#FBCB97"));
+    assert_eq!(colors("Tools 31"), Some("#E78A53"));
+    assert_eq!(colors("MCP"), Some("#E78A53"));
+    assert_eq!(colors("5"), Some("#FBCB97"));
     assert_eq!(colors("Shell"), Some("#C1C1C1"));
     assert_eq!(colors("20"), Some("#FBCB97"));
     assert_eq!(colors("Terminal I/O"), Some("#C1C1C1"));
