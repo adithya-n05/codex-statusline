@@ -658,3 +658,70 @@ fn each_footer_poll_picks_up_a_new_rate_even_with_cached_tool_counts() {
     drop(input);
     assert!(child.wait().unwrap().success());
 }
+
+#[test]
+fn the_first_prompt_has_a_gauge_before_codex_reports_usage() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let read = |events: &[Value], model: &str, context: Value| {
+        observations(&path, events);
+        rendered(
+            home.path(),
+            json!({"thread":{"id":"a","model":{"id":model},"usage":{"context":context}}}),
+            "",
+        )
+        .to_string()
+    };
+    let meta = json!({"type":"session_meta","payload":{"id":"a"}});
+    assert!(read(std::slice::from_ref(&meta), "model", json!({})).contains("CTX 0% used"));
+    let mut events = vec![
+        meta,
+        json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"one","model_context_window":112000}}),
+        json!({"type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"a".repeat(60000)}]}}),
+        json!({"type":"response_item","payload":{"type":"additional_tools","tools":[{"description":"b".repeat(8000)}]}}),
+        json!({"type":"turn_context","payload":{"model":"model"}}),
+        json!({"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"c".repeat(20000)}]}}),
+        json!({"type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"text":"c".repeat(20000)}]}}}),
+    ];
+    let estimate = read(&events, "model", json!({}));
+    assert!(
+        estimate.contains("CTX est. 10% used") && estimate.contains("██░░"),
+        "{estimate}"
+    );
+    assert!(!read(&events, "other", json!({})).contains("est."));
+    assert!(!read(&events, "model", json!({"context_window_size":72000})).contains("est."));
+    assert!(read(&events, "model", json!({"used_percentage":14})).contains("CTX 14% used"));
+    let mut no_window = events.clone();
+    no_window[1]["payload"]["model_context_window"] = Value::Null;
+    assert!(
+        read(&no_window, "model", json!({"context_window_size":112000})).contains("CTX est. 10%")
+    );
+    assert!(!read(&no_window, "model", json!({})).contains("est."));
+    for stop in [
+        json!({"type":"compacted","payload":{}}),
+        json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"two","model_context_window":112000}}),
+    ] {
+        let mut halted = events.clone();
+        halted.push(stop);
+        assert!(!read(&halted, "model", json!({})).contains("est."));
+    }
+    let mut fork = events.clone();
+    fork[0]["payload"]["forked_from_id"] = json!("parent");
+    assert!(!read(&fork, "model", json!({})).contains("est."));
+    let mut unknown = events.clone();
+    unknown.push(json!({"type":"response_item","payload":{"type":"message","content":[{"type":"input_image","image_url":"data:image/example;base64,abc"}]}}));
+    assert!(!read(&unknown, "model", json!({})).contains("est."));
+    events.push(json!({"type":"event_msg","payload":{"type":"token_count","info":{"model_context_window":112000,"last_token_usage":{"total_tokens":25000}}}}));
+    let exact = read(&events, "model", json!({}));
+    assert!(exact.contains("CTX 13% used") && !exact.contains("est."));
+    events.push(json!({"type":"compacted","payload":{}}));
+    assert!(!read(&events, "model", json!({})).contains("est."));
+
+    let logs = Connection::open(home.path().join("logs_9.sqlite")).unwrap();
+    logs.execute_batch("CREATE TABLE logs(id INTEGER PRIMARY KEY,thread_id TEXT,target TEXT,feedback_log_body TEXT); INSERT INTO logs VALUES(1,'a','codex_core::session::turn','span model=model effort=xhigh}: post sampling token usage total_usage_tokens=25000 auto_compact_scope_tokens=25000 auto_compact_scope_limit=Some(100000) auto_compact_limit_scope=Total full_context_window_limit=Some(112000)');").unwrap();
+    let measured = read(&no_window, "model", json!({"context_window_size":112000}));
+    assert!(
+        measured.contains("CTX 13% used") && !measured.contains("est."),
+        "{measured}"
+    );
+}

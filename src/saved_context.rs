@@ -3,10 +3,20 @@ use serde_json::Value;
 pub struct SavedContext {
     model: String,
     reading: Option<(u64, u64)>,
+    first_prompt: Option<crate::first_prompt::FirstPrompt>,
 }
 impl SavedContext {
     pub fn observe(&mut self, event: &Value) {
         let p = &event["payload"];
+        if event["type"] == "session_meta" && p["forked_from_id"].is_null() {
+            self.first_prompt = Some(Default::default());
+        } else if self
+            .first_prompt
+            .as_mut()
+            .is_some_and(|first| !first.observe(&event["type"], p))
+        {
+            self.first_prompt = None;
+        }
         let model = match (event["type"].as_str(), p["type"].as_str()) {
             (Some("turn_context"), _) => p["model"].as_str(),
             (Some("event_msg"), Some("thread_settings_applied")) => {
@@ -27,6 +37,7 @@ impl SavedContext {
                     )
                 {
                     self.reading = Some(reading);
+                    self.first_prompt = None;
                 }
                 return;
             }
@@ -35,12 +46,20 @@ impl SavedContext {
         if let Some(model) = model
             && self.model != model
         {
+            if !self.model.is_empty() {
+                self.first_prompt = None;
+            }
             self.model = model.to_owned();
             self.reading = None;
         }
     }
     pub fn restore(&self, model: &Value, live: &Value) -> Option<Value> {
-        let (window, used) = self.reading?;
+        let Some((window, used)) = self.reading else {
+            return self.first_prompt.as_ref()?.display(
+                !self.model.is_empty() && model.as_str() == Some(&self.model),
+                live,
+            );
+        };
         if self.model.is_empty()
             || model.as_str() != Some(&self.model)
             || live["context_window_size"]

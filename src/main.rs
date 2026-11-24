@@ -108,7 +108,13 @@ fn main() -> io::Result<ExitCode> {
                     .and_then(|(h, id)| codex_statusline::storage::rollout(h, id))
                     .and_then(|path| recent_history.read(&path))
                 {
-                    if awaiting_worker {
+                    if awaiting_worker
+                        || (native_context_missing
+                            && recent
+                                .context
+                                .restore(&t["model"]["id"], &t["usage"]["context"])
+                                .is_some())
+                    {
                         extra.history.context = recent.context.clone();
                     }
                     if let Some(speed) = &recent.speed {

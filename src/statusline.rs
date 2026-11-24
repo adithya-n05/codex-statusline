@@ -93,16 +93,21 @@ pub fn render_enriched(
     .flatten()
     .collect::<Vec<_>>()
     .join(" · ");
-    let context = &state["thread"]["usage"]["context"];
+    let live = &state["thread"]["usage"]["context"];
     let recorded = extra
         .history
         .context
-        .restore(&state["thread"]["model"]["id"], context);
-    let context = recorded.as_ref().unwrap_or(context);
-    let recovered = extra
-        .compaction
-        .as_ref()
-        .map(|sample| sample.restore(context));
+        .restore(&state["thread"]["model"]["id"], live);
+    let context = recorded.as_ref().unwrap_or(live);
+    let recovered = extra.compaction.as_ref().map(|sample| {
+        if context["estimated"].is_boolean() {
+            let measured = sample.restore(live);
+            if measured["used_percentage"].is_number() {
+                return measured;
+            }
+        }
+        sample.restore(context)
+    });
     let context = recovered.as_ref().unwrap_or(context);
     let pressure = extra.compaction.as_ref().and_then(|s| s.pressure(context));
     let mut middle = crate::usage::context(context, pressure);
