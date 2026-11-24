@@ -925,3 +925,71 @@ fn a_large_active_chat_recovers_the_matching_turn_clock_on_the_first_read() {
     let rate = read().expect("rate on the first read of a large active chat");
     assert!((80.0..=100.1).contains(&rate), "{rate}");
 }
+
+#[test]
+fn each_usage_label_matches_its_bar_across_all_pressure_bands() {
+    fn assert_gauge(tree: &Value, label: &str, color: &str) {
+        let cells = tree["children"].as_array().unwrap();
+        let index = cells
+            .iter()
+            .position(|cell| cell["children"][0] == label)
+            .unwrap_or_else(|| panic!("missing {label} in {}", common::plain(tree)));
+        assert!(common::plain(&cells[index + 1]).starts_with('['));
+        assert_eq!(cells[index + 1]["props"]["color"], color, "bar for {label}");
+        assert_eq!(cells[index]["props"]["color"], color, "label {label}");
+    }
+    let now = codex_statusline::usage::unix_now();
+    let reset = now + 3600;
+    for (spent, color) in [
+        (0, "#5F8787"),
+        (49, "#5F8787"),
+        (50, "#FBCB97"),
+        (74, "#FBCB97"),
+        (75, "#E78A53"),
+        (89, "#E78A53"),
+        (90, "#E05252"),
+        (100, "#E05252"),
+    ] {
+        let home = tempfile::tempdir().unwrap();
+        let path = index(home.path());
+        account(home.path(), "fixture-account");
+        let db = Connection::open(home.path().join("logs_1.sqlite")).unwrap();
+        let body = format!(
+            "span model=test-model effort=xhigh}}: post sampling token usage total_usage_tokens={spent} auto_compact_scope_tokens={spent} auto_compact_scope_limit=Some(100) auto_compact_limit_scope=Total full_context_window_limit=Some(1000)"
+        );
+        db.execute_batch("CREATE TABLE logs(id INTEGER PRIMARY KEY,thread_id TEXT,target TEXT,feedback_log_body TEXT);").unwrap();
+        db.execute(
+            "INSERT INTO logs VALUES(1,'a','codex_core::session::turn',?1)",
+            [body],
+        )
+        .unwrap();
+        fs::write(&path, "").unwrap();
+        let mut state = credit_state(reset);
+        state["account"]["rate_limits"][0]["primary_limit"]["used_percent"] = json!(spent);
+        state["thread"]["model"]["id"] = json!("test-model");
+        state["thread"]["usage"]["context"] =
+            json!({"used_percentage":spent,"used_tokens":spent,"context_window_size":1000});
+        let tree = rendered(home.path(), state.clone(), "Tools");
+        let left = 100 - spent;
+        assert_gauge(&tree, &format!("CTX {spent}% used "), color);
+        assert_gauge(&tree, &format!("WKLY {left}% left "), color);
+        // No spending has occurred at 0%, so the weekly gauge remains selected.
+        if spent > 0 {
+            let timestamp = |offset| {
+                db.query_row("SELECT datetime(?1,'unixepoch')", [now - offset], |row| {
+                    row.get::<_, String>(0)
+                })
+                .unwrap()
+            };
+            observations(
+                &path,
+                &[
+                    credit_event(&timestamp(6), reset, "100"),
+                    credit_event(&timestamp(3), reset, &left.to_string()),
+                ],
+            );
+            let tree = rendered(home.path(), state, "CRDTS");
+            assert_gauge(&tree, &format!("CRDTS {left} / 100 {left}% left "), color);
+        }
+    }
+}

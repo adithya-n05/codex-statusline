@@ -140,8 +140,7 @@ pub fn paint_gauge_labels(parts: &mut [serde_json::Value]) {
         return;
     };
     if let Some(text) = label.as_str() {
-        let foreground = if hue == "#5F8787" { "#C1C1C1" } else { hue };
-        *label = painted(text, foreground);
+        *label = painted(text, hue);
     }
     for detail in details {
         if let Some(text) = detail.as_str() {

@@ -214,7 +214,7 @@ fn healthy_usage_is_readable_and_an_empty_allowance_stands_out() {
     assert_eq!(
         colored,
         [
-            ("CTX 25% used ", "#C1C1C1"),
+            ("CTX 25% used ", "#5F8787"),
             ("[█████░░░░░░░░░░░░░░░]", "#5F8787"),
             ("WKLY 0% left ", "#E05252"),
             ("[░░░░░░░░░░░░░░░░░░░░]", "#E05252"),
