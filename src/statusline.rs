@@ -6,6 +6,13 @@ pub fn render(state: &Value) -> Value {
 }
 
 pub fn render_for(state: &Value, identity: &crate::account::Identity) -> Value {
+    render_enriched(state, identity, &crate::runtime::Extra::default())
+}
+pub fn render_enriched(
+    state: &Value,
+    identity: &crate::account::Identity,
+    extra: &crate::runtime::Extra,
+) -> Value {
     let Some(thread) = state["thread"].as_object() else {
         return Value::Null;
     };
@@ -40,6 +47,7 @@ pub fn render_for(state: &Value, identity: &crate::account::Identity) -> Value {
         .and_then(|a| a["policy"].as_str())
         .map(|p| format!("Approvals {p}"));
     first.extend(approval.as_deref());
+    first.extend(extra.git.as_deref());
     let version = state["app"]["cli_version"]
         .as_str()
         .map(|v| format!("CLI {v}"));

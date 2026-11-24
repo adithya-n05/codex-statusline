@@ -10,8 +10,16 @@ fn main() -> io::Result<ExitCode> {
             let identity = codex_statusline::account::codex_home()
                 .map(|home| codex_statusline::account::Identity::load(&home))
                 .unwrap_or_default();
+            let mut worker = codex_statusline::runtime::Worker::new(|state| {
+                let cwd = state
+                    .pointer("/thread/workspace/cwd")
+                    .and_then(serde_json::Value::as_str);
+                codex_statusline::runtime::Extra {
+                    git: cwd.and_then(|p| codex_statusline::git::summary(std::path::Path::new(p))),
+                }
+            });
             protocol::serve(io::stdin().lock(), io::stdout().lock(), |s| {
-                statusline::render_for(s, &identity)
+                statusline::render_enriched(s, &identity, &worker.latest(s))
             })?;
             Ok(ExitCode::SUCCESS)
         }
