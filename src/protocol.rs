@@ -3,7 +3,11 @@ use std::io::{self, BufRead, Write};
 
 const URI: &str = "ui://codex-statusline/footer";
 
-pub fn serve(reader: impl BufRead, mut writer: impl Write) -> io::Result<()> {
+pub fn serve(
+    reader: impl BufRead,
+    mut writer: impl Write,
+    mut render: impl FnMut(&Value) -> Value,
+) -> io::Result<()> {
     for line in reader.lines() {
         let message = serde_json::from_str::<Value>(&line?);
         let reply = match message {
@@ -37,11 +41,7 @@ pub fn serve(reader: impl BufRead, mut writer: impl Write) -> io::Result<()> {
                     "resources/read" if request["params"]["uri"] == URI => {
                         let state =
                             &request["params"]["_meta"]["com.openai/codex-statusline-state"];
-                        let tree = json!(
-                            state
-                                .pointer("/thread/workspace/cwd")
-                                .and_then(Value::as_str)
-                        );
+                        let tree = render(state);
                         json!({"jsonrpc":"2.0","id":id,"result":{"contents":[{"uri":URI,"mimeType":"application/json","text":tree.to_string()}]}})
                     }
                     "resources/read" => error(id.clone(), -32602, "Unexpected resource URI"),
