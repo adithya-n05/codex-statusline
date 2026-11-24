@@ -16,16 +16,9 @@ fn main() -> io::Result<ExitCode> {
                 codex_statusline::account::Identity::ChatGpt(id) => id.clone(),
                 _ => None,
             };
-            let mut active_credits =
-                home.as_deref()
-                    .zip(account_id.as_deref())
-                    .and_then(|(h, id)| {
-                        codex_statusline::credits::Standing::active(
-                            h,
-                            id,
-                            codex_statusline::usage::unix_now(),
-                        )
-                    });
+            let live_account = account_id.clone();
+            let mut active_credits = None;
+            let mut live_ledger = codex_statusline::credits::Ledger::default();
             let mut ledger = codex_statusline::credits::Ledger::default();
             let mut worker = codex_statusline::runtime::Worker::new(move |state| {
                 let cwd = state
@@ -62,12 +55,7 @@ fn main() -> io::Result<ExitCode> {
                         .as_deref()
                         .zip(thread_id)
                         .and_then(|(h, id)| codex_statusline::storage::saved_name(h, id)),
-                    credits: owner.and_then(|(h, id)| {
-                        let reset =
-                            codex_statusline::usage::weekly_window(&state["account"])?["resets_at"]
-                                .as_i64()?;
-                        codex_statusline::credits::Standing::read(h, id, reset)
-                    }),
+                    credits: None,
                     compaction: home.as_deref().and_then(|h| {
                         codex_statusline::compaction::Sample::load(h, &state["thread"])
                     }),
@@ -102,10 +90,21 @@ fn main() -> io::Result<ExitCode> {
                             .and_then(|(_, sample)| sample.clone());
                     }
                 }
+                let owns_rollout = local_home
+                    .as_deref()
+                    .zip(t["id"].as_str())
+                    .zip(live_account.as_deref())
+                    .is_some_and(|((h, id), account)| {
+                        codex_statusline::storage::account_matches(h, id, account)
+                    });
                 if let Some(home) = local_home.as_deref()
                     && let Some(id) = t["id"].as_str()
                     && let Some(path) = codex_statusline::storage::rollout(home, id)
-                    && let Some(recent) = recent_history.read(&path)
+                    && let Some(recent) = recent_history.read_with(&path, |event| {
+                        if owns_rollout {
+                            live_ledger.observe(event);
+                        }
+                    })
                 {
                     if awaiting_worker
                         || (native_context_missing
@@ -118,10 +117,26 @@ fn main() -> io::Result<ExitCode> {
                     }
                     extra.history.merge_recent_speed(recent, home, id);
                 }
-                if let Some(fresh) = &extra.credits {
-                    active_credits = Some(fresh.clone());
-                } else {
-                    extra.credits = active_credits.clone();
+                if let Some((home, account)) = local_home.as_deref().zip(live_account.as_deref()) {
+                    let _ = live_ledger.sync_with_timeout(
+                        home,
+                        account,
+                        std::time::Duration::from_millis(15),
+                    );
+                    let reset = codex_statusline::usage::weekly_window(&s["account"])
+                        .and_then(|w| w["resets_at"].as_i64());
+                    let fresh = match reset {
+                        Some(at) => codex_statusline::credits::Standing::read(home, account, at),
+                        None => codex_statusline::credits::Standing::active(
+                            home,
+                            account,
+                            codex_statusline::usage::unix_now(),
+                        ),
+                    };
+                    if fresh.is_some() {
+                        active_credits = fresh;
+                    }
+                    extra.credits.clone_from(&active_credits);
                 }
                 statusline::render_enriched(s, &identity, &extra)
             })?;

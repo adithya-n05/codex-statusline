@@ -151,6 +151,9 @@ pub struct RecentHistory {
 }
 impl RecentHistory {
     pub fn read(&mut self, path: &Path) -> Option<&Metrics> {
+        self.read_with(path, |_| {})
+    }
+    pub fn read_with(&mut self, path: &Path, observe: impl FnMut(&Value)) -> Option<&Metrics> {
         let file = File::open(path).ok()?;
         let metadata = file.metadata().ok()?;
         let length = metadata.len();
@@ -158,14 +161,14 @@ impl RecentHistory {
         if !self.snapshot.as_ref().is_some_and(|(prev, size, time, _)| {
             prev == path && *size == length && modified.is_some() && *time == modified
         }) {
-            let data = recent(file, length)?;
+            let data = recent(file, length, observe)?;
             self.snapshot = Some((path.to_owned(), length, modified, data));
         }
         self.snapshot.as_ref().map(|(_, _, _, data)| data)
     }
 }
 /// A large chat can still supply its latest measurement in one native footer read.
-fn recent(mut file: File, length: u64) -> Option<Metrics> {
+fn recent(mut file: File, length: u64, mut observe: impl FnMut(&Value)) -> Option<Metrics> {
     const BYTES: u64 = 512 * 1024;
     let offset = length.saturating_sub(BYTES);
     file.seek(SeekFrom::Start(offset)).ok()?;
@@ -177,6 +180,7 @@ fn recent(mut file: File, length: u64) -> Option<Metrics> {
     let mut turns = crate::speed::Turns::recent(offset > 0);
     for bytes in lines {
         if let Ok(event) = serde_json::from_slice::<Value>(&bytes.ok()?) {
+            observe(&event);
             result.context.observe(&event);
             result.turn_rate.observe(&event);
             turns.observe(&event, &mut result.speed);

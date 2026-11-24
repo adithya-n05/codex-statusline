@@ -46,6 +46,14 @@ impl Ledger {
         }
     }
     pub fn sync(&mut self, home: &Path, account: &str) -> rusqlite::Result<()> {
+        self.sync_with_timeout(home, account, std::time::Duration::from_millis(250))
+    }
+    pub fn sync_with_timeout(
+        &mut self,
+        home: &Path,
+        account: &str,
+        timeout: std::time::Duration,
+    ) -> rusqlite::Result<()> {
         if self.pending.is_empty() {
             return Ok(());
         }
@@ -63,7 +71,7 @@ impl Ledger {
             return Err(rusqlite::Error::InvalidPath(dir));
         }
         let mut db = Connection::open(dir.join("credits.sqlite3"))?;
-        db.busy_timeout(std::time::Duration::from_millis(250))?;
+        db.busy_timeout(timeout)?;
         let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         tx.execute_batch("CREATE TABLE IF NOT EXISTS observations(account TEXT NOT NULL,reset INTEGER NOT NULL,at INTEGER NOT NULL,balance REAL NOT NULL,PRIMARY KEY(account,reset,at)) WITHOUT ROWID;")?;
         {
@@ -93,6 +101,7 @@ impl Standing {
             rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
         )
         .ok()?;
+        db.busy_timeout(std::time::Duration::from_millis(15)).ok()?;
         let reset = db
             .query_row(
                 "SELECT reset FROM observations WHERE account=?1 AND reset>?2 AND reset<=?3 ORDER BY at DESC, reset LIMIT 1",
@@ -115,6 +124,7 @@ impl Standing {
             rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
         )
         .ok()?;
+        db.busy_timeout(std::time::Duration::from_millis(15)).ok()?;
         // Reconstruct in observation order so replaying another chat cannot invent a top up.
         let mut query = db
             .prepare("SELECT balance FROM observations WHERE account=?1 AND reset BETWEEN ?2 AND ?3 ORDER BY at, reset")

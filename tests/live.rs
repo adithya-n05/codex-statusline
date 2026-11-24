@@ -1,4 +1,6 @@
 mod common;
+#[path = "common/provider.rs"]
+mod provider;
 use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::{
@@ -991,5 +993,44 @@ fn each_usage_label_matches_its_bar_across_all_pressure_bands() {
             let tree = rendered(home.path(), state, "CRDTS");
             assert_gauge(&tree, &format!("CRDTS {left} / 100 {left}% left "), color);
         }
+    }
+}
+
+#[test]
+fn new_account_balances_reach_open_footers_on_the_very_next_read() {
+    let home = tempfile::tempdir().unwrap();
+    account(home.path(), "fixture-account");
+    let path = index(home.path());
+    let now = codex_statusline::usage::unix_now();
+    let reset = now + 3600;
+    let db = Connection::open_in_memory().unwrap();
+    let sample = |t, balance| {
+        let stamp = db
+            .query_row("SELECT datetime(?1,'unixepoch')", [now - t], |r| {
+                r.get::<_, String>(0)
+            })
+            .unwrap();
+        credit_event(&stamp, reset, balance)
+    };
+    let state = credit_state(reset);
+    let mut session = provider::Provider::open(home.path());
+    let mut other = provider::Provider::open(home.path());
+    let other_thread = json!({"thread":{"id":"other"}});
+    assert!(!other.poll(&other_thread).contains("CRDTS"));
+    let mut log = fs::File::create(path).unwrap();
+    writeln!(log, "{}", sample(10, "1000")).unwrap();
+    writeln!(log, "{}", sample(9, "950")).unwrap();
+    assert!(session.poll(&state).contains("CRDTS 950 / 1,000"));
+    for (t, amount, label) in [
+        (8, "925", "CRDTS 925 / 1,000"),
+        (7, "1025", "CRDTS 1,025 / 1,100"),
+        (6, "924", "CRDTS 924 / 1,100"),
+    ] {
+        writeln!(log, "{}", sample(t, amount)).unwrap();
+        assert!(session.poll(&state).contains(label), "same chat: {label}");
+        assert!(
+            other.poll(&other_thread).contains(label),
+            "other open chat: {label}"
+        );
     }
 }
