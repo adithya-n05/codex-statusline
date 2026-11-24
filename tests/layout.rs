@@ -54,7 +54,7 @@ fn twenty_cell_bar_uses_bathory_colors_and_clamps_bounds() {
         let text = result["children"][0].as_str().unwrap();
         assert_eq!(
             text,
-            format!("[{}{}]", "▮".repeat(blocks), "·".repeat(20 - blocks))
+            format!("[{}{}]", "█".repeat(blocks), "░".repeat(20 - blocks))
         );
     }
 }
@@ -99,7 +99,7 @@ fn partial_gauges_keep_a_visible_filled_cell_and_a_visible_empty_cell() {
         let bar = codex_statusline::layout::gauge(pct, 100. - pct);
         assert_eq!(
             bar["children"][0],
-            format!("[{}{}]", "▮".repeat(lit), "·".repeat(20 - lit))
+            format!("[{}{}]", "█".repeat(lit), "░".repeat(20 - lit))
         );
     }
 }

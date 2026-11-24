@@ -253,7 +253,7 @@ fn spent_credits_replace_the_weekly_gauge_until_that_same_reset() {
     observations(&path, &[at(100000, "31000"), at(60000, "46500")]);
     let usage = run(state.clone());
     assert!(
-        usage.contains("Credits 31,000 / 62,000 · 50% left [▮▮▮▮▮▮▮▮▮▮··········] · reset"),
+        usage.contains("Credits 31,000 / 62,000 · 50% left [██████████░░░░░░░░░░] · reset"),
         "{usage}"
     );
     assert!(!usage.contains("7D ") && !usage.contains('≈'));

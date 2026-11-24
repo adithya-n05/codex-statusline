@@ -56,7 +56,7 @@ pub fn gauge(filled_percent: f64, pressure_percent: f64) -> serde_json::Value {
     } else {
         "#5F8787"
     };
-    let bar = format!("[{}{}]", "▮".repeat(filled), "·".repeat(20 - filled));
+    let bar = format!("[{}{}]", "█".repeat(filled), "░".repeat(20 - filled));
     serde_json::json!({"type":"text","props":{"color":color},"children":[bar]})
 }
 pub fn painted(text: impl Into<String>, color: &str) -> serde_json::Value {

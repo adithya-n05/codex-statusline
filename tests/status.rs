@@ -116,7 +116,7 @@ fn weekly_allowance_decreases_and_counts_down_to_the_reported_reset() {
     let tree = weekly(&account, 10000);
     assert_eq!(
         tree.iter().map(plain).collect::<String>(),
-        "7D 70% left [▮▮▮▮▮▮▮▮▮▮▮▮▮▮······] · reset 2d 1h"
+        "7D 70% left [██████████████░░░░░░] · reset 2d 1h"
     );
     assert!(weekly(&json!({}), 0).is_empty());
     assert!(
@@ -202,4 +202,36 @@ fn active_service_tier_follows_effort_and_precedes_permissions() {
             format!("Dir · Test · xhigh · {want} · Full Access")
         );
     }
+}
+
+#[test]
+fn context_and_empty_weekly_bars_share_their_labels_foreground() {
+    let state = json!({
+        "thread": {"usage":{"context":{"used_percentage":25}}},
+        "account": {"rate_limits":[{"limit_id":"codex","secondary_limit":{
+            "window_minutes":10080,"used_percent":100
+        }}]}
+    });
+    let footer = render(&state);
+    let colored: Vec<_> = footer["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|part| {
+            Some((
+                part["children"].get(0)?.as_str()?,
+                part["props"]["color"].as_str()?,
+            ))
+        })
+        .filter(|(text, _)| !text.is_empty())
+        .collect();
+    assert_eq!(
+        colored,
+        [
+            ("Context 25% used ", "#5F8787"),
+            ("[█████░░░░░░░░░░░░░░░]", "#5F8787"),
+            ("7D 0% left ", "#E05252"),
+            ("[░░░░░░░░░░░░░░░░░░░░]", "#E05252"),
+        ]
+    );
 }
