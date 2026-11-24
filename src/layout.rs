@@ -85,16 +85,22 @@ pub fn painted(text: impl Into<String>, color: &str) -> serde_json::Value {
     serde_json::json!({"type":"text","props":{"color":color},"children":[text.into()]})
 }
 pub fn paint_gauge_labels(parts: &mut [serde_json::Value]) {
-    let Some(hue) = parts
-        .iter()
-        .find_map(|v| v.pointer("/props/color")?.as_str())
-        .map(str::to_owned)
+    let [label, bar, details @ ..] = parts else {
+        return;
+    };
+    let Some(hue) = bar
+        .pointer("/props/color")
+        .and_then(serde_json::Value::as_str)
     else {
         return;
     };
-    for part in parts {
-        if let Some(s) = part.as_str() {
-            *part = painted(s, &hue);
+    if let Some(text) = label.as_str() {
+        let foreground = if hue == "#5F8787" { "#C1C1C1" } else { hue };
+        *label = painted(text, foreground);
+    }
+    for detail in details {
+        if let Some(text) = detail.as_str() {
+            *detail = painted(text, "#969696");
         }
     }
 }

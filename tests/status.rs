@@ -201,11 +201,11 @@ fn active_service_tier_follows_effort_and_precedes_permissions() {
 }
 
 #[test]
-fn context_and_empty_weekly_bars_share_their_labels_foreground() {
+fn healthy_usage_is_readable_and_an_empty_allowance_stands_out() {
     let state = json!({
         "thread": {"usage":{"context":{"used_percentage":25}}},
         "account": {"rate_limits":[{"limit_id":"codex","secondary_limit":{
-            "window_minutes":10080,"used_percent":100
+            "window_minutes":10080,"used_percent":100,"resets_at":1
         }}]}
     });
     let footer = render(&state);
@@ -224,10 +224,11 @@ fn context_and_empty_weekly_bars_share_their_labels_foreground() {
     assert_eq!(
         colored,
         [
-            ("CTX 25% used ", "#5F8787"),
+            ("CTX 25% used ", "#C1C1C1"),
             ("[█████░░░░░░░░░░░░░░░]", "#5F8787"),
             ("WKLY 0% left ", "#E05252"),
             ("[░░░░░░░░░░░░░░░░░░░░]", "#E05252"),
+            (" · reset now", "#969696"),
         ]
     );
 }

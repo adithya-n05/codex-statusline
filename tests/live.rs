@@ -111,6 +111,11 @@ fn compaction_red_tracks_the_displayed_models_actual_scope_at_the_exact_boundary
             .as_array()
             .unwrap()
             .iter()
+            .filter(|c| {
+                c["children"][0]
+                    .as_str()
+                    .is_some_and(|s| s.starts_with('['))
+            })
             .find_map(|c| c.pointer("/props/color").and_then(Value::as_str))
             .unwrap()
             .to_owned()
