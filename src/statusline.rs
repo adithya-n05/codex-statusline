@@ -20,7 +20,18 @@ pub fn render_enriched(
         .get("workspace")
         .and_then(|w| w["cwd"].as_str())
         .unwrap_or("");
-    let mut first = vec![cwd];
+    let abbreviated = std::env::var_os("HOME").and_then(|home| {
+        let suffix = std::path::Path::new(cwd).strip_prefix(&home).ok()?;
+        Some(
+            std::path::Path::new("~")
+                .join(suffix)
+                .display()
+                .to_string()
+                .trim_end_matches('/')
+                .to_owned(),
+        )
+    });
+    let mut first = vec![abbreviated.as_deref().unwrap_or(cwd)];
     if let Some(name) = thread
         .get("name")
         .and_then(Value::as_str)

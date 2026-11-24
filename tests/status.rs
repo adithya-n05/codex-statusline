@@ -146,3 +146,21 @@ fn api_spend_uses_cli_thread_totals_without_a_model_price_table() {
     assert!(!plain(&render_for(&json!({"thread":{}}), &Identity::Api)).contains('$'));
     assert!(!plain(&render_for(&state, &Identity::ChatGpt(None))).contains('$'));
 }
+#[test]
+fn home_paths_abbreviate_only_the_actual_home_directory_component() {
+    let h = std::env::var("HOME").unwrap();
+    for (input, expected) in [
+        (h.clone(), "~".into()),
+        (format!("{h}/work/app"), "~/work/app".into()),
+        (format!("{h}-copy/repo"), format!("{h}-copy/repo")),
+        ("/".into(), "/".into()),
+    ] {
+        assert_eq!(
+            screen(json!({"workspace":{"cwd":input}}))
+                .lines()
+                .next()
+                .unwrap(),
+            expected
+        );
+    }
+}
