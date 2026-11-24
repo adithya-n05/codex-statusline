@@ -57,5 +57,6 @@ fn activity_distinguishes_totals_categories_failures_and_session_details() {
         assert_eq!(colors(label), Some("#C1C1C1"), "{label}");
         assert_eq!(colors(count), Some("#FBCB97"), "{count}");
     }
-    assert_eq!(colors("Failed 3"), Some("#CC7373"));
+    assert_eq!(colors("Failed"), colors("Shell"));
+    assert_eq!(colors("3"), colors("20"));
 }
