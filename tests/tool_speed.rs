@@ -158,3 +158,72 @@ fn hosted_tool_estimates_use_only_the_recorded_request_parameters() {
         );
     }
 }
+
+#[test]
+fn latest_response_speed_includes_generation_of_tool_only_replies() {
+    let mut chat = Chat::open();
+    // Native cumulative output and the response ledger can start from different counts.
+    chat.append(json!({"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"output_tokens":70000}}}}));
+    let idle_view = json!({"thread":{"id":"chat","agent":{"state":"ready"}}});
+    let mut call = chat.call(
+        "first",
+        json!({"type":"custom_tool_call","name":"exec","input":"command"}),
+        14,
+    );
+    call["payload"]["internal_chat_message_metadata_passthrough"]["create_time"] =
+        json!(chat.start as f64 + 10.25);
+    chat.append(call.clone());
+    chat.append(chat.report(15, 190, 190)); // 190 tokens in 4.75 seconds.
+    assert!(chat.provider.poll(&idle_view).contains("Latest 40 tok/s"));
+    chat.append(call);
+    chat.append(chat.call(
+        "first",
+        json!({"type":"custom_tool_call_output","output":"slow result"}),
+        40,
+    ));
+    chat.append(json!({"timestamp":chat.stamp(40),"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"output_tokens":190},"total_token_usage":{"output_tokens":190}}}}));
+    assert!(chat.provider.poll(&idle_view).contains("Latest 40 tok/s"));
+    let reasoning = json!({"timestamp":chat.stamp(47),"type":"event_msg","payload":{"type":"item_completed","turn_id":"turn","started_at_ms":(chat.start+44)*1000,"item":{"type":"Reasoning","id":"reason"}}});
+    chat.append(reasoning);
+    for (id, offset) in [("second", 47), ("third", 48)] {
+        let mut call = chat.call(
+            id,
+            json!({"type":"function_call","name":"lookup","arguments":"{}"}),
+            49,
+        );
+        call["payload"]["internal_chat_message_metadata_passthrough"]["create_time"] =
+            json!(chat.start + offset);
+        chat.append(call);
+    }
+    chat.append(chat.report(50, 550, 360)); // One response, including reasoning and both calls, in six seconds.
+    assert!(chat.provider.poll(&idle_view).contains("Latest 60 tok/s"));
+    chat.append(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"turn","duration_ms":90000}}));
+    assert!(chat.provider.poll(&idle_view).contains("Last 60 tok/s"));
+}
+
+#[test]
+fn invalid_or_missing_tool_creation_times_cannot_supply_a_generation_rate() {
+    for creation in [
+        Value::Null,
+        json!("yesterday"),
+        json!(-30),
+        json!(1e40),
+        json!(codex_statusline::usage::unix_now() + 100),
+    ] {
+        let mut chat = Chat::open();
+        let mut call = chat.call(
+            "c",
+            json!({"type":"function_call","name":"run","arguments":"{}"}),
+            10,
+        );
+        call["payload"]["internal_chat_message_metadata_passthrough"]["create_time"] = creation;
+        chat.append(call);
+        chat.append(chat.report(11, 500, 500));
+        assert!(
+            !chat
+                .provider
+                .poll(&json!({"thread":{"id":"chat"}}))
+                .contains("Latest")
+        );
+    }
+}

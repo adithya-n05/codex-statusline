@@ -3,6 +3,8 @@ use serde_json::Value;
 #[derive(Default)]
 pub struct Turns {
     cumulative: u64,
+    response_cumulative: u64,
+    awaiting_native_mirror: Option<u64>,
     partial: bool,
     active: Option<(String, u64)>,
     observed: bool,
@@ -17,9 +19,20 @@ impl Turns {
             ..Default::default()
         }
     }
-    pub fn observe(&mut self, event: &Value, last: &mut Option<String>) {
+    pub fn observe(&mut self, event: &Value, tool_started: Option<i64>, last: &mut Option<String>) {
         let timestamp = &event["timestamp"];
         let payload = &event["payload"];
+        if let Some(start) = tool_started {
+            if self.partial && self.active.is_none() {
+                self.active = payload
+                    .pointer("/internal_chat_message_metadata_passthrough/turn_id")
+                    .or_else(|| payload.get("turn_id"))
+                    .and_then(Value::as_str)
+                    .map(|id| (id.to_owned(), self.cumulative));
+            }
+            self.include_start(start);
+            return;
+        }
         if event["type"] == "token_usage_record" {
             if self
                 .active
@@ -28,11 +41,11 @@ impl Turns {
                 && let Some(total) = payload
                     .pointer("/thread_token_usage/output_tokens")
                     .and_then(Value::as_u64)
-                && total > self.cumulative
-                && self.record_rate(timestamp, &payload["usage"]["output_tokens"], last)
+                && total > self.response_cumulative
             {
-                self.cumulative = total;
-                self.observed = true;
+                self.response_cumulative = total;
+                self.awaiting_native_mirror = payload["usage"]["output_tokens"].as_u64();
+                self.record_rate(timestamp, &payload["usage"]["output_tokens"], last);
             }
             return;
         }
@@ -50,6 +63,8 @@ impl Turns {
                 self.active = event["turn_id"]
                     .as_str()
                     .map(|id| (id.into(), self.cumulative));
+                self.response_cumulative = 0;
+                self.awaiting_native_mirror = None;
                 self.observed = false;
                 self.output_started_ms = None;
                 self.last_response_rate = None;
@@ -64,8 +79,7 @@ impl Turns {
                     .is_some_and(|(id, _)| event["turn_id"].as_str() == Some(id)) =>
             {
                 if let Some(start) = event["started_at_ms"].as_i64() {
-                    self.output_started_ms =
-                        Some(self.output_started_ms.map_or(start, |old| old.min(start)));
+                    self.include_start(start);
                 }
             }
             Some("turn_aborted")
@@ -85,7 +99,14 @@ impl Turns {
                     .pointer("/info/total_token_usage/output_tokens")
                     .and_then(Value::as_u64)
                 {
-                    if n > self.cumulative {
+                    let response_output =
+                        event["info"]["last_token_usage"]["output_tokens"].as_u64();
+                    let mirror =
+                        response_output.is_some() && self.awaiting_native_mirror == response_output;
+                    if mirror {
+                        self.awaiting_native_mirror = None;
+                    }
+                    if n > self.cumulative && !mirror {
                         self.record_rate(
                             timestamp,
                             &event["info"]["last_token_usage"]["output_tokens"],
@@ -116,6 +137,9 @@ impl Turns {
             }
             _ => {}
         }
+    }
+    fn include_start(&mut self, start: i64) {
+        self.output_started_ms = Some(self.output_started_ms.map_or(start, |old| old.min(start)));
     }
     fn record_rate(
         &mut self,

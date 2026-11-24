@@ -15,7 +15,8 @@ pub(crate) struct TurnRate {
 }
 
 impl TurnRate {
-    pub fn observe(&mut self, record: &Value) {
+    /// Return the creation time of a newly observed model request for response timing.
+    pub fn observe(&mut self, record: &Value) -> Option<i64> {
         let p = &record["payload"];
         let turn = p["turn_id"].as_str();
         match (record["type"].as_str(), p["type"].as_str()) {
@@ -49,9 +50,20 @@ impl TurnRate {
                     if self.id.is_none() {
                         self.id = Some(turn.to_owned());
                     }
-                    self.calls
-                        .entry(call.id.to_owned())
-                        .or_insert((at, call.bytes));
+                    if let std::collections::hash_map::Entry::Vacant(entry) =
+                        self.calls.entry(call.id.to_owned())
+                    {
+                        entry.insert((at, call.bytes));
+                        let seconds = p
+                            .pointer("/internal_chat_message_metadata_passthrough/create_time")?
+                            .as_f64()?;
+                        let created = (seconds * 1000.).round() as i64;
+                        return (created > 0
+                            && created <= at
+                            && self.started_ms.is_none_or(|start| created >= start)
+                            && self.report_ms.is_none_or(|report| created >= report))
+                        .then_some(created);
+                    }
                 }
             }
             (Some("token_usage_record"), _)
@@ -90,6 +102,7 @@ impl TurnRate {
             }
             _ => {}
         }
+        None
     }
     fn visible_item(&mut self, record: &Value) {
         let p = &record["payload"];

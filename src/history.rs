@@ -19,7 +19,6 @@ pub struct Metrics {
 impl Metrics {
     fn observe(&mut self, event: &Value) {
         self.context.observe(event);
-        self.turn_rate.observe(event);
         let p = &event["payload"];
         let args;
         let plan = match (event["type"].as_str(), p["type"].as_str()) {
@@ -131,7 +130,10 @@ impl History {
                 if let Some(call) = crate::activity::Call::parse(event) {
                     cursor.metrics.activity.record(&call);
                 }
-                cursor.turns.observe(event, &mut cursor.metrics.speed);
+                let tool_started = cursor.metrics.turn_rate.observe(event);
+                cursor
+                    .turns
+                    .observe(event, tool_started, &mut cursor.metrics.speed);
                 observe(&value);
                 cursor.metrics.observe(&value);
             }
@@ -275,8 +277,8 @@ fn recent(
             if tail.end > context_offset {
                 result.context.observe(&event);
             }
-            result.turn_rate.observe(&event);
-            turns.observe(&event, &mut result.speed);
+            let tool_started = result.turn_rate.observe(&event);
+            turns.observe(&event, tool_started, &mut result.speed);
         }
     }
     Some((result, tail))
