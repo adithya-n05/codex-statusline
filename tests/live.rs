@@ -671,7 +671,7 @@ fn each_footer_poll_picks_up_a_new_rate_even_with_cached_tool_counts() {
     write_event(
         json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"t","duration_ms":10000}}),
     );
-    assert!(poll("a").contains("Last 125 tok/s"));
+    assert!(poll("a").contains("Last 22.5 tok/s"));
     drop(input);
     assert!(child.wait().unwrap().success());
 }

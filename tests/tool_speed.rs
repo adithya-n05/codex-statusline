@@ -194,7 +194,7 @@ fn latest_response_speed_includes_generation_of_tool_only_replies() {
     chat.append(chat.report(50, 550, 360)); // One response, including reasoning and both calls, in six seconds.
     assert!(!chat.provider.poll(&idle_view).contains("tok/s"));
     chat.append(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"turn","duration_ms":90000}}));
-    assert!(chat.provider.poll(&idle_view).contains("Last 60 tok/s"));
+    assert!(chat.provider.poll(&idle_view).contains("Last 6.1 tok/s"));
 }
 
 #[test]
@@ -269,7 +269,7 @@ fn the_live_turn_rate_changes_on_quiet_polls_and_counts_newly_written_output() {
     chat.append(chat.report(75, 36000, 6000));
     assert!(rate(&chat.row()) < generated);
     chat.append(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"turn","duration_ms":80000}}));
-    assert!(chat.row().contains("Last "));
+    assert!(chat.row().contains("Last 450.0 tok/s"));
 }
 
 #[test]
@@ -297,4 +297,35 @@ fn a_new_usage_report_updates_the_live_turn_in_a_large_chat() {
         row.contains("Turn est. 4.0 tok/s") || row.contains("Turn est. 3.9 tok/s"),
         "{row}"
     );
+}
+
+#[test]
+fn ending_a_turn_preserves_its_estimate_including_unreported_generated_input() {
+    for end in ["task_complete", "turn_aborted"] {
+        let mut chat = Chat::open();
+        chat.append(chat.report(10, 600, 600));
+        let pending = chat.call(
+            "pending",
+            json!({"type":"function_call","name":"tool","arguments":"x".repeat(396)}),
+            18,
+        );
+        chat.append(pending.clone());
+        chat.append(pending);
+        chat.append(json!({"timestamp":chat.stamp(19),"type":"event_msg","payload":{"type":end,"turn_id":"other"}}));
+        assert!(chat.row().contains("Turn est."));
+        chat.append(json!({"timestamp":chat.stamp(20),"type":"event_msg","payload":{"type":end,"turn_id":"turn"}}));
+        for _ in 0..2 {
+            let row = chat.row();
+            assert!(
+                row.contains("Last 35.0 tok/s") && !row.contains("Turn est."),
+                "{row}"
+            );
+        }
+        chat.append(json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"new","started_at":chat.start+21}}));
+        let row = chat.row();
+        assert!(
+            row.contains("Turn est. 0.0 tok/s") && !row.contains("Last "),
+            "{row}"
+        );
+    }
 }

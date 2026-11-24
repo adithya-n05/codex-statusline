@@ -9,6 +9,7 @@ pub(crate) struct TurnRate {
     host_baseline: Option<u64>,
     confirmed: u64,
     finished: bool,
+    finished_elapsed_ms: Option<i64>,
     report_ms: Option<i64>,
     visible: HashMap<String, (i64, u64)>,
     calls: HashMap<String, (i64, u64)>,
@@ -102,6 +103,13 @@ impl TurnRate {
                 if self.id.is_none() {
                     self.id = turn.map(str::to_owned);
                 }
+                if !self.finished {
+                    self.finished_elapsed_ms = self.started_ms.and_then(|start| {
+                        p["duration_ms"].as_i64().or_else(|| {
+                            crate::speed::timestamp_ms(&record["timestamp"])?.checked_sub(start)
+                        })
+                    });
+                }
                 self.finished = true;
             }
             _ => {}
@@ -169,6 +177,7 @@ impl TurnRate {
             self.confirmed = self.confirmed.max(recent.confirmed);
             self.host_baseline = recent.host_baseline.or(self.host_baseline);
             self.finished |= recent.finished;
+            self.finished_elapsed_ms = recent.finished_elapsed_ms.or(self.finished_elapsed_ms);
             self.report_ms = self.report_ms.max(recent.report_ms);
             self.visible.extend(recent.visible.clone());
             for (id, sample) in &recent.calls {
@@ -197,12 +206,19 @@ impl TurnRate {
         });
     }
     pub fn label(&self, thread: &Value, now_ms: i64, last: Option<&str>) -> Option<String> {
-        if self.finished
-            || !matches!(
-                thread.pointer("/agent/state").and_then(Value::as_str),
-                Some("working" | "thinking" | "waiting")
-            )
-        {
+        if self.finished {
+            if let Some(elapsed) = self.finished_elapsed_ms.filter(|ms| *ms > 0) {
+                let tokens = self.tokens(0);
+                if tokens > 0 {
+                    return Some(rate_label("Last", tokens, elapsed));
+                }
+            }
+            return last.map(str::to_owned);
+        }
+        if !matches!(
+            thread.pointer("/agent/state").and_then(Value::as_str),
+            Some("working" | "thinking" | "waiting")
+        ) {
             return last.map(str::to_owned);
         }
         let elapsed = now_ms.checked_sub(self.started_ms?)?;
@@ -211,6 +227,9 @@ impl TurnRate {
             .and_then(Value::as_u64)
             .zip(self.host_baseline)
             .map_or(0, |(n, base)| n.saturating_sub(base));
+        (elapsed > 0).then(|| rate_label("Turn est.", self.tokens(native), elapsed))
+    }
+    fn tokens(&self, native: u64) -> u64 {
         let estimated = if native > self.confirmed {
             0
         } else {
@@ -225,12 +244,11 @@ impl TurnRate {
                 .sum::<u64>()
                 .div_ceil(4)
         };
-        let tokens = self.confirmed.max(native).saturating_add(estimated);
-        (elapsed > 0).then(|| {
-            format!(
-                "Turn est. {:.1} tok/s",
-                tokens as f64 * 1000. / elapsed as f64
-            )
-        })
+        self.confirmed.max(native).saturating_add(estimated)
     }
+}
+
+fn rate_label(label: &str, tokens: u64, elapsed_ms: i64) -> String {
+    let rate = tokens as f64 * 1000.0 / elapsed_ms as f64;
+    format!("{label} {rate:.1} tok/s")
 }
