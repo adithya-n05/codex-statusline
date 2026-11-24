@@ -23,8 +23,12 @@ fn main() {
             Trial::test("provider_paints_text_on_all_three_terminal_rows", || {
                 let mut tty = terminal::Terminal::start_provider(180);
                 tty.wait(
-                    |l| l.iter().any(|r| r.contains("API key")),
-                    "colored footer",
+                    |rows| {
+                        ["~/work", "API key", "CLI "]
+                            .iter()
+                            .all(|word| rows.iter().any(|row| row.contains(word)))
+                    },
+                    "all three colored footer rows",
                 );
                 for (word, rgb) in [
                     ("~/work", (251, 203, 151)),
