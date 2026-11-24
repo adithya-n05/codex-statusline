@@ -117,9 +117,7 @@ fn main() -> io::Result<ExitCode> {
                     {
                         extra.history.context = recent.context.clone();
                     }
-                    if let Some(speed) = &recent.speed {
-                        extra.history.speed = Some(speed.clone());
-                    }
+                    extra.history.merge_recent_speed(recent);
                 }
                 if let Some(fresh) = &extra.credits {
                     active_credits = Some(fresh.clone());

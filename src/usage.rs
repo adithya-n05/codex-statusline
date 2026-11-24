@@ -73,10 +73,13 @@ pub fn weekly(account: &Value, now: i64) -> Vec<Value> {
 }
 
 pub fn unix_now() -> i64 {
+    unix_now_ms() / 1000
+}
+pub(crate) fn unix_now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs() as i64
+        .as_millis() as i64
 }
 pub fn api_thread(usage: &Value) -> Vec<Value> {
     let mut fields = Vec::new();

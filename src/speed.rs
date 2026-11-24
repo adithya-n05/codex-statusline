@@ -136,14 +136,17 @@ impl Turns {
     }
 }
 fn response_rate(start: i64, timestamp: &Value, output: &Value) -> Option<f64> {
-    let end = time::OffsetDateTime::parse(
+    let end = i128::from(timestamp_ms(timestamp)?);
+    let elapsed = end - i128::from(start);
+    let output = output.as_u64()?;
+    (elapsed > 0 && output > 0).then(|| output as f64 * 1000. / elapsed as f64)
+}
+pub(crate) fn timestamp_ms(timestamp: &Value) -> Option<i64> {
+    let ns = time::OffsetDateTime::parse(
         timestamp.as_str()?,
         &time::format_description::well_known::Rfc3339,
     )
     .ok()?
-    .unix_timestamp_nanos()
-        / 1_000_000;
-    let elapsed = end - i128::from(start);
-    let output = output.as_u64()?;
-    (elapsed > 0 && output > 0).then(|| output as f64 * 1000. / elapsed as f64)
+    .unix_timestamp_nanos();
+    i64::try_from(ns / 1_000_000).ok()
 }

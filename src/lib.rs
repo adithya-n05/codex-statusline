@@ -12,4 +12,5 @@ pub mod saved_context;
 mod speed;
 pub mod statusline;
 pub mod storage;
+mod turn_rate;
 pub mod usage;

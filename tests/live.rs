@@ -758,3 +758,52 @@ fn first_prompt_estimate_yields_to_the_matching_response_usage_record() {
     events.push(json!({"type":"event_msg","payload":{"type":"token_count","info":{"model_context_window":112000,"last_token_usage":{"total_tokens":27000}}}}));
     check(&events, "CTX 15% used");
 }
+
+#[test]
+fn active_turn_speed_uses_confirmed_turn_tokens_and_moves_between_reports() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let started = codex_statusline::usage::unix_now() - 10;
+    let mut events = vec![
+        json!({"type":"session_meta","payload":{"id":"a"}}),
+        json!({"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"output_tokens":9000}}}}),
+        json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"one","started_at":started}}),
+    ];
+    let report = |id: &str, output: u64, total: u64| json!({"type":"token_usage_record","payload":{"turn_id":id,"turn_token_usage":{"output_tokens":output},"thread_token_usage":{"output_tokens":total}}});
+    let state = |id: &str, agent: &str, n: u64| json!({"thread":{"id":id,"agent":{"state":agent},"usage":{"total":{"output_tokens":n}}}});
+    let rate = |state: Value| {
+        let tree = rendered(home.path(), state, "");
+        let text = common::plain(&tree);
+        text.split("Turn ")
+            .nth(1)
+            .and_then(|s| s.split_whitespace().next()?.parse::<f64>().ok())
+    };
+    observations(&path, &events);
+    assert_eq!(rate(state("a", "thinking", 9000)), None);
+    events.extend([
+        report("one", 1000, 10000),
+        report("other", 9000, 92000),
+        report("one", 1000, 10000),
+    ]);
+    observations(&path, &events);
+    let first = rate(state("a", "thinking", 10000)).expect("running turn rate");
+    assert!((82.0..=100.1).contains(&first), "{first}");
+    thread::sleep(Duration::from_millis(250));
+    let next = rate(state("a", "working", 10000)).unwrap();
+    assert!(next < first, "{first} then {next}");
+    assert!(rate(state("a", "working", 10500)).unwrap() > first);
+    assert_eq!(rate(state("a", "ready", 10500)), None);
+    assert_eq!(rate(state("other", "thinking", 10500)), None);
+    events.push(json!({"type":"event_msg","payload":{"type":"turn_aborted","turn_id":"stale"}}));
+    observations(&path, &events);
+    assert!(rate(state("a", "waiting", 10000)).is_some());
+    events.push(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"one"}}));
+    observations(&path, &events);
+    assert_eq!(rate(state("a", "working", 10000)), None);
+    events.push(json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"two","started_at":started+2}}));
+    observations(&path, &events);
+    assert_eq!(rate(state("a", "working", 10000)), None);
+    events.push(report("two", 50, 10050));
+    observations(&path, &events);
+    assert!(rate(state("a", "thinking", 10050)).is_some_and(|r| r > 0. && r < 9.));
+}

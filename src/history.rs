@@ -11,6 +11,7 @@ pub struct Metrics {
     pub plan: Option<String>,
     pub context: crate::saved_context::SavedContext,
     pub speed: Option<String>,
+    pub(crate) turn_rate: crate::turn_rate::TurnRate,
     available: bool,
     activity: crate::activity::Activity,
 }
@@ -18,6 +19,7 @@ pub struct Metrics {
 impl Metrics {
     fn observe(&mut self, event: &Value) {
         self.context.observe(event);
+        self.turn_rate.observe(event);
         let p = &event["payload"];
         let args;
         let plan = match (event["type"].as_str(), p["type"].as_str()) {
@@ -131,6 +133,12 @@ impl History {
     }
 }
 impl Metrics {
+    pub fn merge_recent_speed(&mut self, recent: &Self) {
+        self.turn_rate.merge_recent(&recent.turn_rate);
+        if let Some(speed) = &recent.speed {
+            self.speed = Some(speed.clone());
+        }
+    }
     pub fn tools_label(&self) -> Option<String> {
         self.available.then(|| self.activity.label())
     }
@@ -169,6 +177,7 @@ fn recent(mut file: File, length: u64) -> Option<Metrics> {
     for bytes in lines {
         if let Ok(event) = serde_json::from_slice::<Value>(&bytes.ok()?) {
             result.context.observe(&event);
+            result.turn_rate.observe(&event);
             turns.observe(&event, &mut result.speed);
         }
     }

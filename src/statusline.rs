@@ -119,7 +119,8 @@ pub fn render_enriched(
     let context = recovered.as_ref().unwrap_or(context);
     let pressure = extra.compaction.as_ref().and_then(|s| s.pressure(context));
     let mut middle = crate::usage::context(context, pressure);
-    let now = crate::usage::unix_now();
+    let now_ms = crate::usage::unix_now_ms();
+    let now = now_ms / 1000;
     let live_reset =
         crate::usage::weekly_window(&state["account"]).and_then(|w| w["resets_at"].as_i64());
     crate::layout::paint_gauge_labels(&mut middle);
@@ -140,9 +141,13 @@ pub fn render_enriched(
     }
     crate::layout::paint_gauge_labels(&mut weekly);
     middle.extend(weekly);
+    let turn_rate = extra.history.turn_rate.label(&state["thread"], now_ms);
     for (label, color) in [
         (identity.label(), "#E78A53"),
-        (extra.history.speed.as_deref(), "#FBCB97"),
+        (
+            turn_rate.as_deref().or(extra.history.speed.as_deref()),
+            "#FBCB97",
+        ),
     ] {
         let Some(label) = label else { continue };
         if !middle.is_empty() {
