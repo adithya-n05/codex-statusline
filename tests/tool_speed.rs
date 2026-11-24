@@ -270,3 +270,27 @@ fn a_running_tool_shows_the_latest_generation_rate_instead_of_hiding_it_in_the_t
     chat.append(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"turn","duration_ms":80000}}));
     assert!(chat.row().contains("Last 50 tok/s"));
 }
+
+#[test]
+fn a_new_usage_report_times_the_whole_tool_response_in_a_large_chat() {
+    let mut chat = Chat::open();
+    chat.append(json!({"type":"event_msg","payload":{"type":"item_completed","turn_id":"turn","started_at_ms":(chat.start+10)*1000,"item":{"type":"Reasoning","id":"r"}}}));
+    let mut call = chat.call(
+        "before-tail",
+        json!({"type":"function_call","name":"run","arguments":"{}"}),
+        18,
+    );
+    call["payload"]["internal_chat_message_metadata_passthrough"]["create_time"] =
+        json!(chat.start + 17);
+    chat.append(call);
+    chat.append(json!({"type":"event_msg","payload":{"type":"plan_update","plan":[{"status":"completed"}]}}));
+    chat.append(json!({"padding":"x".repeat(600000)}));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(4);
+    while !chat.row().contains("Plan 1/1") {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    chat.append(chat.report(20, 400, 400));
+    let row = chat.row();
+    assert!(row.contains("Latest 40 tok/s"), "{row}");
+}

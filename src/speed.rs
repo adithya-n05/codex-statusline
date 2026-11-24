@@ -7,7 +7,7 @@ pub(crate) struct ToolMeasurement {
     pub rate: f64,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Turns {
     cumulative: u64,
     response_cumulative: u64,

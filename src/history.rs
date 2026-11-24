@@ -11,13 +11,17 @@ pub struct Metrics {
     pub plan: Option<String>,
     pub context: crate::saved_context::SavedContext,
     pub speed: Option<String>,
-    pub(crate) latest_tool: Option<crate::speed::ToolMeasurement>,
+    pub(crate) responses: crate::speed::Turns,
     pub(crate) turn_rate: crate::turn_rate::TurnRate,
     tool_position: Option<(u64, u64)>,
     activity: crate::activity::Activity,
 }
 
 impl Metrics {
+    fn observe_speed(&mut self, event: &Value) {
+        let call = self.turn_rate.observe(event);
+        self.responses.observe(event, call, &mut self.speed);
+    }
     fn observe(&mut self, event: &Value) {
         self.context.observe(event);
         let p = &event["payload"];
@@ -52,7 +56,6 @@ struct Cursor {
     file_id: u64,
     offset: u64,
     metrics: Metrics,
-    turns: crate::speed::Turns,
 }
 #[derive(Default)]
 pub struct History {
@@ -131,16 +134,11 @@ impl History {
                 if let Some(call) = crate::activity::Call::parse(event) {
                     cursor.metrics.activity.record(&call);
                 }
-                let call = cursor.metrics.turn_rate.observe(event);
-                cursor.turns.observe(event, call, &mut cursor.metrics.speed);
+                cursor.metrics.observe_speed(event);
                 observe(&value);
                 cursor.metrics.observe(&value);
             }
         }
-        cursor
-            .metrics
-            .latest_tool
-            .clone_from(&cursor.turns.latest_tool);
         cursor.metrics.tool_position = Some((file_id, cursor.offset));
         self.files.push_front((path.into(), cursor));
         self.files.truncate(8);
@@ -153,7 +151,9 @@ impl Metrics {
         self.turn_rate.restore_start(home, thread);
         if let Some(speed) = &recent.speed {
             self.speed = Some(speed.clone());
-            self.latest_tool.clone_from(&recent.latest_tool);
+            self.responses
+                .latest_tool
+                .clone_from(&recent.responses.latest_tool);
         }
     }
     pub fn tools_label(&self) -> Option<String> {
@@ -163,7 +163,7 @@ impl Metrics {
 /// Read the latest measurements independently of the background Git and activity scan.
 #[derive(Default)]
 pub struct RecentHistory {
-    context_base: Option<u64>,
+    baseline_offset: Option<u64>,
     snapshot: Option<(PathBuf, u64, Option<std::time::SystemTime>, Metrics)>,
     tool_tail: ToolTail,
 }
@@ -206,19 +206,19 @@ impl RecentHistory {
         let base = baseline.and_then(|m| {
             let (original, end) = m.tool_position?;
             (length > TAIL_BYTES && original == id && (length - TAIL_BYTES..=length).contains(&end))
-                .then_some((end, &m.context))
+                .then_some((end, m))
         });
-        let context_base = base.map(|(end, _)| end);
+        let baseline_offset = base.map(|(end, _)| end);
         if !self.snapshot.as_ref().is_some_and(|(prev, size, time, _)| {
             prev == path
                 && self.tool_tail.file_id == id
-                && self.context_base == context_base
+                && self.baseline_offset == baseline_offset
                 && *size == length
                 && modified.is_some()
                 && *time == modified
         }) {
             let (data, tail) = recent(file, id, length, base, observe)?;
-            self.context_base = context_base;
+            self.baseline_offset = baseline_offset;
             self.tool_tail = tail;
             self.snapshot = Some((path.to_owned(), length, modified, data));
         }
@@ -240,7 +240,7 @@ fn recent(
     mut file: File,
     id: u64,
     length: u64,
-    base: Option<(u64, &crate::saved_context::SavedContext)>,
+    base: Option<(u64, &Metrics)>,
     mut observe: impl FnMut(&Value),
 ) -> Option<(Metrics, ToolTail)> {
     let offset = length.saturating_sub(TAIL_BYTES);
@@ -257,14 +257,25 @@ fn recent(
         end: start,
         calls: vec![],
     };
-    let mut result = Metrics::default();
-    let context_offset = if let Some((end, context)) = base.filter(|(end, _)| *end >= start) {
-        result.context = context.clone();
-        end
-    } else {
-        start
+    let (mut result, observed_end) = match base.filter(|(end, _)| *end >= start) {
+        Some((end, previous)) => (
+            Metrics {
+                context: previous.context.clone(),
+                turn_rate: previous.turn_rate.clone(),
+                responses: previous.responses.clone(),
+                speed: previous.speed.clone(),
+                ..Default::default()
+            },
+            end,
+        ),
+        None => (
+            Metrics {
+                responses: crate::speed::Turns::recent(offset > 0),
+                ..Default::default()
+            },
+            start,
+        ),
     };
-    let mut turns = crate::speed::Turns::recent(offset > 0);
     let mut bytes = Vec::new();
     loop {
         bytes.clear();
@@ -278,13 +289,11 @@ fn recent(
                 tail.calls.push((tail.end, call));
             }
             observe(&event);
-            if tail.end > context_offset {
+            if tail.end > observed_end {
                 result.context.observe(&event);
+                result.observe_speed(&event);
             }
-            let call = result.turn_rate.observe(&event);
-            turns.observe(&event, call, &mut result.speed);
         }
     }
-    result.latest_tool = turns.latest_tool;
     Some((result, tail))
 }
