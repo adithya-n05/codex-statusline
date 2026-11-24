@@ -93,3 +93,33 @@ pub fn api_thread(usage: &Value) -> Vec<Value> {
         vec![json!(fields.join(" · "))]
     }
 }
+pub fn restore(live: &Value, window: u64, used: Option<u64>) -> Value {
+    let mut value = if live.is_object() {
+        live.clone()
+    } else {
+        serde_json::json!({})
+    };
+    if !value["context_window_size"].as_u64().is_some_and(|n| n > 0) {
+        value["context_window_size"] = window.into();
+    }
+    if value["used_tokens"].is_null()
+        && let Some(n) = used
+    {
+        value["used_tokens"] = n.into();
+    }
+    if value["used_percentage"].is_null()
+        && let Some(n) = value["used_tokens"].as_u64()
+    {
+        // Codex excludes its 12,000 token baseline when displaying the remaining percentage.
+        let capacity = window.saturating_sub(12000);
+        let remaining = if capacity == 0 {
+            0.
+        } else {
+            (100. * window.saturating_sub(n) as f64 / capacity as f64)
+                .clamp(0., 100.)
+                .round()
+        };
+        value["used_percentage"] = (100. - remaining).into();
+    }
+    value
+}

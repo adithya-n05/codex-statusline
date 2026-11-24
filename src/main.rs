@@ -88,13 +88,31 @@ fn main() -> io::Result<ExitCode> {
                         t["model"]["id"].clone(),
                         t["usage"]["context"]["context_window_size"].clone(),
                     );
-                    if startup_sample.as_ref().is_none_or(|(k, _)| k != &key) {
+                    if startup_sample.as_ref().is_none_or(|(k, _, _)| k != &key) {
                         let sample = local_home
                             .as_deref()
                             .and_then(|h| codex_statusline::compaction::Sample::load(h, t));
-                        startup_sample = Some((key, sample));
+                        let recorded = if sample.is_none() {
+                            local_home
+                                .as_deref()
+                                .zip(t["id"].as_str())
+                                .and_then(|(h, id)| codex_statusline::storage::rollout(h, id))
+                                .and_then(|p| {
+                                    codex_statusline::saved_context::SavedContext::tail(&p)
+                                })
+                        } else {
+                            None
+                        };
+                        startup_sample = Some((key, sample, recorded));
                     }
-                    extra.compaction = startup_sample.as_ref().and_then(|(_, s)| s.clone());
+                    if let Some((_, sample, recorded)) = &startup_sample {
+                        extra.compaction = sample.clone();
+                        if extra.history.tools_label().is_none()
+                            && let Some(recorded) = recorded
+                        {
+                            extra.history.context = recorded.clone();
+                        }
+                    }
                 }
                 if let Some(fresh) = &extra.credits {
                     active_credits = Some(fresh.clone());

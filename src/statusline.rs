@@ -94,6 +94,11 @@ pub fn render_enriched(
     .collect::<Vec<_>>()
     .join(" · ");
     let context = &state["thread"]["usage"]["context"];
+    let recorded = extra
+        .history
+        .context
+        .restore(&state["thread"]["model"]["id"], context);
+    let context = recorded.as_ref().unwrap_or(context);
     let recovered = extra
         .compaction
         .as_ref()

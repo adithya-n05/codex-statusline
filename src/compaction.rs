@@ -56,34 +56,7 @@ impl Sample {
         })
     }
     pub fn restore(&self, live: &Value) -> Value {
-        let mut value = if live.is_object() {
-            live.clone()
-        } else {
-            serde_json::json!({})
-        };
-        if !value["context_window_size"].as_u64().is_some_and(|n| n > 0) {
-            value["context_window_size"] = self.window.into();
-        }
-        if value["used_tokens"].is_null()
-            && let Some(n) = self.total
-        {
-            value["used_tokens"] = n.into();
-        }
-        if value["used_percentage"].is_null()
-            && let Some(n) = value["used_tokens"].as_u64()
-        {
-            // Codex excludes its 12,000 token baseline when displaying the remaining percentage.
-            let capacity = self.window.saturating_sub(12000);
-            let remaining = if capacity == 0 {
-                0.
-            } else {
-                (100. * self.window.saturating_sub(n) as f64 / capacity as f64)
-                    .clamp(0., 100.)
-                    .round()
-            };
-            value["used_percentage"] = (100. - remaining).into();
-        }
-        value
+        crate::usage::restore(live, self.window, self.total)
     }
     pub fn pressure(&self, context: &Value) -> Option<f64> {
         let used = context["used_tokens"].as_u64();

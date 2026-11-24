@@ -9,6 +9,7 @@ use std::{
 #[derive(Clone, Default)]
 pub struct Metrics {
     pub plan: Option<String>,
+    pub context: crate::saved_context::SavedContext,
     pub speed: Option<String>,
     available: bool,
     activity: crate::activity::Activity,
@@ -16,6 +17,7 @@ pub struct Metrics {
 
 impl Metrics {
     fn observe(&mut self, event: &Value) {
+        self.context.observe(event);
         let p = &event["payload"];
         let args;
         let plan = match (event["type"].as_str(), p["type"].as_str()) {

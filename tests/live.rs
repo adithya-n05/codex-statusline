@@ -472,3 +472,36 @@ fn generation_speed_updates_between_model_responses_without_charging_tool_waits(
     let idle = read(&events);
     assert!(idle.contains("Last 150 tok/s") && !idle.contains("Live "));
 }
+#[test]
+fn a_resumed_chat_recovers_recorded_usage_after_diagnostic_logs_rotate() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let model = json!({"type":"turn_context","payload":{"model":"test-model"}});
+    let usage = json!({"type":"event_msg","payload":{"type":"token_count","info":{"model_context_window":258400,"last_token_usage":{"total_tokens":135200},"total_token_usage":{"total_tokens":1000000}}}});
+    let read = |model: &str, context: Value| {
+        rendered(
+            home.path(),
+            json!({"thread":{"id":"a","model":{"id":model},"usage":{"context":context}}}),
+            "",
+        )
+        .to_string()
+    };
+    observations(&path, &[model.clone(), usage.clone()]);
+    assert!(read("test-model", json!({})).contains("Context 50% used"));
+    assert!(read("test-model", json!({"used_percentage":70})).contains("Context 70% used"));
+    assert!(!read("other", json!({})).contains("Context 50% used"));
+    assert!(
+        !read("test-model", json!({"context_window_size":800000})).contains("Context 50% used")
+    );
+    for end in [
+        json!({"type":"compacted","payload":{}}),
+        json!({"type":"turn_context","payload":{"model":"other"}}),
+    ] {
+        observations(&path, &[model.clone(), usage.clone(), end]);
+        assert!(!read("test-model", json!({})).contains("Context 50% used"));
+    }
+    let mut f = fs::File::create(&path).unwrap();
+    writeln!(f, "{}", "x".repeat(600_000)).unwrap();
+    writeln!(f, "{model}\n{usage}").unwrap();
+    assert!(read("test-model", json!({})).contains("Context 50% used"));
+}
