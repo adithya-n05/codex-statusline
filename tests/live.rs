@@ -253,18 +253,18 @@ fn spent_credits_replace_the_weekly_gauge_until_that_same_reset() {
     observations(&path, &[at(100000, "31000"), at(60000, "46500")]);
     let usage = run(state.clone());
     assert!(
-        usage.contains("Credits 31,000 / 62,000 · 50% left [██████████░░░░░░░░░░] · reset"),
+        usage.contains("CRDTS 31,000 / 62,000 · 50% left [██████████░░░░░░░░░░] · reset"),
         "{usage}"
     );
     assert!(!usage.contains("7D ") && !usage.contains('≈'));
     observations(&path, &[at(105000, "33000")]);
-    assert!(run(state.clone()).contains("Credits 33,000 / 64,000"));
+    assert!(run(state.clone()).contains("CRDTS 33,000 / 64,000"));
     observations(&path, &[at(106000, "0")]);
-    assert!(run(state.clone()).contains("Credits 0 / 64,000 · 0% left"));
+    assert!(run(state.clone()).contains("CRDTS 0 / 64,000 · 0% left"));
     assert!(run(credit_state(reset + 604800)).contains("7D 18% left"));
     assert!(run(credit_state(now - 1)).contains("7D 18% left"));
     account(home.path(), "second-account");
-    assert!(!run(state).contains("Credits"));
+    assert!(!run(state).contains("CRDTS"));
 }
 #[test]
 fn missing_chat_names_use_only_the_saved_name_of_the_displayed_thread() {
@@ -315,13 +315,13 @@ fn alternating_reset_seconds_keep_the_same_credit_balance_and_weekly_baseline() 
         let mut state = credit_state(live);
         state["account"]["rate_limits"][0]["primary_limit"]["used_percent"] = json!(100);
         let row = rendered(home.path(), state, "Tools").to_string();
-        assert!(row.contains("Credits 60,000 / 62,000"), "{row}");
+        assert!(row.contains("CRDTS 60,000 / 62,000"), "{row}");
         assert!(!row.contains("7D 0% left"));
     }
     assert!(
         !rendered(home.path(), credit_state(reset + 604800), "Tools")
             .to_string()
-            .contains("Credits 60,000")
+            .contains("CRDTS 60,000")
     );
 }
 #[test]
@@ -348,20 +348,20 @@ fn spent_credits_survive_cold_start_missing_limits_and_a_slow_thread_refresh() {
     rendered(home.path(), credit_state(reset), "Tools");
     for state in [credit_state(reset + 1), json!({"thread":{"id":"new"}})] {
         let first = rendered(home.path(), state, "").to_string();
-        assert!(first.contains("Credits 450 / 500"), "{first}");
+        assert!(first.contains("CRDTS 450 / 500"), "{first}");
     }
     for state in [credit_state(reset + 604800), credit_state(now - 1)] {
         assert!(
             !rendered(home.path(), state, "")
                 .to_string()
-                .contains("Credits 450")
+                .contains("CRDTS 450")
         );
     }
     account(home.path(), "different-account");
     assert!(
         !rendered(home.path(), credit_state(reset), "")
             .to_string()
-            .contains("Credits 450")
+            .contains("CRDTS 450")
     );
 }
 #[test]
@@ -425,7 +425,7 @@ fn whole_credit_labels_preserve_fractional_bar_math() {
     assert!(
         rendered(home.path(), credit_state(reset), "Tools")
             .to_string()
-            .contains("Credits 1 / 1 · 50% left")
+            .contains("CRDTS 1 / 1 · 50% left")
     );
 }
 #[test]
