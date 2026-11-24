@@ -39,6 +39,8 @@ Codex starts the Rust executable over standard input and output. The provider re
 
 ## Reading the gauges
 
+Codex CLI 0.172.0 requests the footer about once a second. Each read checks for new tool calls, credit balances, and weekly usage reports. An open chat can also pick up a credit balance saved by another chat on the same account. If Codex has yet to report a change, the footer keeps the last reading.
+
 **Context.** `CTX 56% used` means the chat has used 56% of its effective context window. On resume, the footer can recover the last measurement for the same thread and model before the next turn. An empty chat with a recorded session starts at 0%. While Codex processes its first prompt, `CTX est.` uses the recorded text and tool definitions to estimate usage. The first measured count replaces it. Images have no reliable text equivalent, so a prompt containing one waits for the measured count. The bar changes from Bathory blue to peach at 50% of the measured compaction limit, orange at 75%, and red at 90%. Its fill still shows the CLI’s context usage. When Codex has yet to report a matching limit for the current thread, model, and window, the colors follow context usage up to orange. A CLI update that changes the diagnostic format can also make the threshold unavailable.
 
 **Weekly usage and credits.** `WKLY` shows the weekly allowance remaining and the time until Codex’s reported reset. Once an observed balance falls, credits take its place until that same reset. A week that opens at 60,000 credits and receives 2,000 more has a base of 62,000. At a balance of 31,000 the bar is half full. Both balances round to whole credits for display. A later top up increases the base by the amount added.
@@ -47,7 +49,7 @@ The provider keeps timestamped balance observations for the signed in account un
 
 **API usage.** A chat using an API key shows its reported input and output tokens and the CLI’s dollar estimate when available. That estimate covers the thread. Codex supplies the pricing data. Usage across every chat or the whole API key requires separate billing access.
 
-**Output speed.** During a turn, `Turn 42.1 tok/s` gives the average output rate since the turn began, including time spent waiting for tools. Codex CLI 0.172.0 refreshes the footer about once a second. If Codex saves an assistant message or a public reasoning summary before it reports the token count, `Turn est.` includes that text at roughly four UTF8 bytes per token. The measured count replaces the estimate when it arrives. Tool output adds no tokens to the estimate. A response can stream on screen before any of its text reaches the session file.
+**Output speed.** During a turn, `Turn 42.1 tok/s` gives the average output rate since the turn began, including time spent waiting for tools. If Codex saves an assistant message or a public reasoning summary before it reports the token count, `Turn est.` includes that text at roughly four UTF8 bytes per token. The measured count replaces the estimate when it arrives. Tool output adds no tokens to the estimate. A response can stream on screen before any of its text reaches the session file.
 
 When the turn’s start time is unavailable, `Latest` shows the most recent measured response rate. `Last` keeps that rate after the turn ends. Older chats may only have timing for the whole turn.
 
