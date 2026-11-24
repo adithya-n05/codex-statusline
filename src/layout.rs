@@ -49,7 +49,7 @@ fn activity_line(last: &str) -> serde_json::Value {
         }
         match field.rsplit_once('\u{a0}') {
             Some(("Tools", _)) => spans.push(painted(field, "#E78A53")),
-            Some(("Failed", _)) => spans.push(painted(field, "#E05252")),
+            Some(("Failed", _)) => spans.push(painted(field, "#CC7373")),
             Some((label, count)) if label != "CLI" && count.parse::<usize>().is_ok() => {
                 let accent = if label == "MCP" { "#E78A53" } else { "#C1C1C1" };
                 spans.push(painted(label, accent));
