@@ -266,3 +266,26 @@ fn spent_credits_replace_the_weekly_gauge_until_that_same_reset() {
     account(home.path(), "second-account");
     assert!(!run(state).contains("Credits"));
 }
+#[test]
+fn missing_chat_names_use_only_the_saved_name_of_the_displayed_thread() {
+    let home = tempfile::tempdir().unwrap();
+    fs::write(index(home.path()), "").unwrap();
+    let db = Connection::open(home.path().join("state_1.sqlite")).unwrap();
+    let first = |name: Value| {
+        rendered(
+            home.path(),
+            json!({"thread":{"id":"a","name":name,"workspace":{"cwd":"Dir"}}}),
+            "Tools",
+        )["children"][0]
+            .as_str()
+            .unwrap()
+            .replace('\u{a0}', " ")
+    };
+    assert_eq!(first(Value::Null), "Dir"); // The index title can contain the entire first prompt.
+    db.execute("UPDATE threads SET name='Saved chat'", [])
+        .unwrap();
+    assert_eq!(first(Value::Null), "Dir · Saved chat");
+    assert_eq!(first(json!("Live chat")), "Dir · Live chat");
+    db.execute("UPDATE threads SET name='  '", []).unwrap();
+    assert_eq!(first(Value::Null), "Dir");
+}

@@ -48,6 +48,10 @@ fn main() -> io::Result<ExitCode> {
                 }
                 codex_statusline::runtime::Extra {
                     history: metrics,
+                    saved_name: home
+                        .as_deref()
+                        .zip(thread_id)
+                        .and_then(|(h, id)| codex_statusline::storage::saved_name(h, id)),
                     credits: owner.and_then(|(h, id)| {
                         let reset =
                             codex_statusline::usage::weekly_window(&state["account"])?["resets_at"]

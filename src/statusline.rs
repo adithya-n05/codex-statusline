@@ -25,6 +25,7 @@ pub fn render_enriched(
         .get("name")
         .and_then(Value::as_str)
         .filter(|s| !s.trim().is_empty())
+        .or(extra.saved_name.as_deref())
     {
         first.push(name);
     }

@@ -48,3 +48,11 @@ pub fn account_matches(home: &Path, thread: &str, account: &str) -> bool {
         })
         .unwrap_or(false)
 }
+pub fn saved_name(home: &Path, id: &str) -> Option<String> {
+    open(home, "state_")?
+        .query_row("SELECT name FROM threads WHERE id=?1", [id], |r| {
+            r.get::<_, String>(0)
+        })
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+}
