@@ -104,7 +104,8 @@ pub fn render_enriched(
     let now = crate::usage::unix_now();
     let live_reset =
         crate::usage::weekly_window(&state["account"]).and_then(|w| w["resets_at"].as_i64());
-    let weekly =
+    crate::layout::paint_gauge_labels(&mut middle);
+    let mut weekly =
         if matches!(identity, crate::account::Identity::Api) {
             crate::usage::api_thread(&state["thread"]["usage"])
         } else {
@@ -119,15 +120,17 @@ pub fn render_enriched(
     if !middle.is_empty() && !weekly.is_empty() {
         middle.push(serde_json::json!(" · "));
     }
+    crate::layout::paint_gauge_labels(&mut weekly);
     middle.extend(weekly);
-    for label in [identity.label(), extra.history.speed.as_deref()]
-        .into_iter()
-        .flatten()
-    {
+    for (label, color) in [
+        (identity.label(), "#E78A53"),
+        (extra.history.speed.as_deref(), "#5F8787"),
+    ] {
+        let Some(label) = label else { continue };
         if !middle.is_empty() {
             middle.push(serde_json::json!(" · "));
         }
-        middle.push(serde_json::json!(label));
+        middle.push(crate::layout::painted(label, color));
     }
     footer(&first.join(" · "), middle, &last)
 }

@@ -35,8 +35,8 @@ pub fn footer(first: &str, middle: Vec<serde_json::Value>, last: &str) -> serde_
     use serde_json::json;
     let mut children = vec![json!(fixed_line(first)), json!("\n")];
     children.extend(middle);
-    children.extend([json!("\n"), json!(fixed_line(last))]);
-    json!({"type":"text","children":children})
+    children.extend([json!("\n"), painted(fixed_line(last), "#5F8787")]);
+    json!({"type":"text","props":{"color":"#FBCB97"},"children":children})
 }
 pub fn gauge(filled_percent: f64, pressure_percent: f64) -> serde_json::Value {
     let percent = filled_percent.clamp(0., 100.);
@@ -58,4 +58,21 @@ pub fn gauge(filled_percent: f64, pressure_percent: f64) -> serde_json::Value {
     };
     let bar = format!("[{}{}]", "▮".repeat(filled), "·".repeat(20 - filled));
     serde_json::json!({"type":"text","props":{"color":color},"children":[bar]})
+}
+pub fn painted(text: impl Into<String>, color: &str) -> serde_json::Value {
+    serde_json::json!({"type":"text","props":{"color":color},"children":[text.into()]})
+}
+pub fn paint_gauge_labels(parts: &mut [serde_json::Value]) {
+    let Some(hue) = parts
+        .iter()
+        .find_map(|v| v.pointer("/props/color")?.as_str())
+        .map(str::to_owned)
+    else {
+        return;
+    };
+    for part in parts {
+        if let Some(s) = part.as_str() {
+            *part = painted(s, &hue);
+        }
+    }
 }

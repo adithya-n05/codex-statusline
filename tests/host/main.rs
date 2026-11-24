@@ -20,6 +20,25 @@ fn main() {
     libtest_mimic::run(
         &Arguments::from_args(),
         vec![
+            Trial::test("provider_paints_text_on_all_three_terminal_rows", || {
+                let mut tty = terminal::Terminal::start_provider(180);
+                tty.wait(
+                    |l| l.iter().any(|r| r.contains("API key")),
+                    "colored footer",
+                );
+                for (word, rgb) in [
+                    ("~/work", (251, 203, 151)),
+                    ("API key", (231, 138, 83)),
+                    ("CLI ", (95, 135, 135)),
+                ] {
+                    assert_eq!(
+                        tty.foreground(word),
+                        Some(vt100::Color::Rgb(rgb.0, rgb.1, rgb.2)),
+                        "{word}"
+                    );
+                }
+                Ok(())
+            }),
             Trial::test("installed_provider_populates_a_fresh_chat", || {
                 installed_provider_populates_a_fresh_chat();
                 Ok(())

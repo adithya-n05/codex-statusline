@@ -76,8 +76,8 @@ fn last_turn_speed_uses_completed_output_and_closes_the_usage_row() {
     let tree = rendered(home.path(), state.clone(), "tok/s");
     let parts = tree["children"].as_array().unwrap();
     let last_break = parts.iter().rposition(|v| v == "\n").unwrap();
-    assert_eq!(parts[last_break - 1], "Last 120 tok/s");
-    assert_eq!(parts[last_break - 3], "API key");
+    assert_eq!(parts[last_break - 1]["children"][0], "Last 120 tok/s");
+    assert_eq!(parts[last_break - 3]["children"][0], "API key");
     for (output, ms) in [(540, 0), (300, 2000)] {
         events.push(count(output));
         events.push(end("second", ms));

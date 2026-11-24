@@ -46,6 +46,22 @@ impl Terminal {
         );
         self.input.write_all(b"/side\r").unwrap();
     }
+    pub fn foreground(&self, word: &str) -> Option<vt100::Color> {
+        let screen = self.parser.screen();
+        for row in (0..screen.size().0).rev() {
+            for col in 0..screen.size().1 {
+                let matches = word.chars().enumerate().all(|(i, ch)| {
+                    screen
+                        .cell(row, col + i as u16)
+                        .is_some_and(|c| c.contents().replace('\u{a0}', " ") == ch.to_string())
+                });
+                if matches {
+                    return screen.cell(row, col).map(|c| c.fgcolor());
+                }
+            }
+        }
+        None
+    }
     pub fn resize(&mut self, width: u16) {
         self.parser.screen_mut().set_size(ROWS, width);
         self.pty
@@ -111,6 +127,7 @@ args = {}
         cmd.env("PATH", env::var_os("PATH").unwrap());
         cmd.env("LANG", "en_US.UTF-8");
         cmd.env("TERM", "xterm-256color");
+        cmd.env("COLORTERM", "truecolor");
         cmd.env("XDG_CACHE_HOME", base.join("cache"));
         cmd.args(["--no-daemon", "-C"]);
         cmd.arg(&cwd);
