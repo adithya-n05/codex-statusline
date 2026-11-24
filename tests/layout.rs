@@ -77,3 +77,12 @@ fn long_outer_rows_stay_within_the_resource_budget_at_a_grapheme_boundary() {
     }
     assert_eq!(fixed_line(&"a".repeat(8192)).len(), 8192);
 }
+#[test]
+fn rows_that_fit_exactly_keep_their_last_grapheme() {
+    for n in 8189..=8192 {
+        let text = "x".repeat(n);
+        assert_eq!(fixed_line(&text), text);
+    }
+    let text = format!("{}e\u{301}", "a".repeat(8189));
+    assert_eq!(fixed_line(&text), text);
+}
