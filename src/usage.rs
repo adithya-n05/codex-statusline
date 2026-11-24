@@ -11,7 +11,8 @@ pub fn context(value: &Value, compaction_pressure: Option<f64>) -> Vec<Value> {
     if let Some(pct) = percent {
         let pct = pct.clamp(0., 100.);
         line.push(json!(format!("CTX {pct:.0}% ")));
-        line.push(gauge(pct, compaction_pressure.unwrap_or(pct)));
+        // Reserve red for a measured compaction limit; the host percentage can use a different denominator.
+        line.push(gauge(pct, compaction_pressure.unwrap_or(pct.min(89.))));
     } else if window.is_some() {
         line.push(json!("CTX —"));
     }

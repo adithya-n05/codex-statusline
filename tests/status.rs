@@ -164,3 +164,14 @@ fn home_paths_abbreviate_only_the_actual_home_directory_component() {
         );
     }
 }
+#[test]
+fn the_compaction_warning_requires_a_known_threshold() {
+    use codex_statusline::usage::context;
+    let sample = json!({"used_percentage":96,"used_tokens":960,"context_window_size":1000});
+    assert_eq!(context(&sample, None)[1]["props"]["color"], "#E78A53");
+    assert_eq!(context(&sample, Some(90.))[1]["props"]["color"], "#E05252");
+    assert_eq!(
+        context(&sample, Some(89.99))[1]["props"]["color"],
+        "#E78A53"
+    );
+}
