@@ -45,6 +45,17 @@ impl FirstPrompt {
         true
     }
 
+    pub fn reported_usage(&self, report: &Value) -> Option<(u64, u64)> {
+        let active = self.turn_id.as_deref()?;
+        if report["turn_id"].as_str() != Some(active) {
+            return None;
+        }
+        Some((
+            self.window?,
+            report.pointer("/usage/total_tokens")?.as_u64()?,
+        ))
+    }
+
     pub fn display(&self, model_matches: bool, live: &Value) -> Option<Value> {
         if live["used_percentage"].is_number() || live["used_tokens"].is_number() {
             return None;

@@ -725,3 +725,36 @@ fn the_first_prompt_has_a_gauge_before_codex_reports_usage() {
         "{measured}"
     );
 }
+
+#[test]
+fn first_prompt_estimate_yields_to_the_matching_response_usage_record() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let mut events = vec![
+        json!({"type":"session_meta","payload":{"id":"a"}}),
+        json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"first","model_context_window":112000}}),
+        json!({"type":"turn_context","payload":{"model":"test-model"}}),
+        json!({"type":"response_item","payload":{"type":"message","content":[{"type":"input_text","text":"a".repeat(88000)}]}}),
+    ];
+    let state = json!({"thread":{"id":"a","model":{"id":"test-model"}}});
+    let report = |id: &str, total: Value| json!({"type":"token_usage_record","payload":{"turn_id":id,"usage":{"total_tokens":total},"thread_token_usage":{"total_tokens":900000}}});
+    let check = |events: &[Value], label: &str| {
+        observations(&path, events);
+        for stage in ["", "Tools"] {
+            assert!(
+                rendered(home.path(), state.clone(), stage)
+                    .to_string()
+                    .contains(label)
+            );
+        }
+    };
+    events.extend([
+        report("previous", json!(99999)),
+        report("first", Value::Null),
+    ]);
+    check(&events, "CTX est. 10% used");
+    events.push(report("first", json!(26000)));
+    check(&events, "CTX 14% used");
+    events.push(json!({"type":"event_msg","payload":{"type":"token_count","info":{"model_context_window":112000,"last_token_usage":{"total_tokens":27000}}}}));
+    check(&events, "CTX 15% used");
+}

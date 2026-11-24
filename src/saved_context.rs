@@ -26,6 +26,16 @@ impl SavedContext {
                 self.reading = None;
                 return;
             }
+            (Some("token_usage_record"), _) => {
+                if let Some(reading) = self
+                    .first_prompt
+                    .as_ref()
+                    .and_then(|first| first.reported_usage(p))
+                {
+                    self.reading = Some(reading);
+                }
+                return;
+            }
             (Some("event_msg"), Some("token_count")) => {
                 if let Some(reading) = p
                     .pointer("/info/model_context_window")
