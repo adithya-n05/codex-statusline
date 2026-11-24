@@ -78,16 +78,20 @@ fn context_uses_the_displayed_models_window_and_native_percentage() {
     for (context, start, end) in [
         (
             json!({"context_window_size":258400,"used_tokens":120000,"used_percentage":48}),
-            "CTX 48% [",
-            " / 258400",
+            "Context 48% used [",
+            "]",
         ),
         (
             json!({"context_window_size":1000,"used_tokens":250}),
-            "CTX 25% [",
-            " / 1000",
+            "Context 25% used [",
+            "]",
         ),
-        (json!({"context_window_size":800000}), "CTX —", " / 800000"),
-        (json!({"used_percentage":12}), "CTX 12% [", "]"),
+        (
+            json!({"context_window_size":800000}),
+            "Context awaiting usage",
+            "usage",
+        ),
+        (json!({"used_percentage":12}), "Context 12% used [", "]"),
         (
             json!({"context_window_size":0}),
             "Context awaiting usage",

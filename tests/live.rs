@@ -381,7 +381,7 @@ fn idle_resume_restores_the_recorded_context_before_the_first_turn() {
     };
     let idle = read("a", "new-model", json!({}));
     assert!(
-        idle.contains("CTX 50%") && idle.contains("258400"),
+        idle.contains("Context 50% used") && !idle.contains("258400"),
         "{idle}"
     );
     assert!(
@@ -390,7 +390,7 @@ fn idle_resume_restores_the_recorded_context_before_the_first_turn() {
             "new-model",
             json!({"used_percentage":61,"context_window_size":258400})
         )
-        .contains("CTX 61%")
+        .contains("Context 61% used")
     );
     for (id, model) in [("b", "new-model"), ("a", "other")] {
         let row = read(id, model, json!({}));
