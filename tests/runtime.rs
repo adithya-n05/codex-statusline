@@ -40,3 +40,28 @@ fn a_slow_repository_never_blocks_a_read_or_leaks_into_a_different_chat() {
     assert!(tree.contains("branch"));
     assert!(!tree.contains("branch-b"));
 }
+
+#[test]
+fn an_active_chat_refreshes_tool_activity_on_successive_native_ticks() {
+    let (tx, rx) = mpsc::channel();
+    let mut n = 0;
+    let mut worker = Worker::new(move |_| {
+        n += 1;
+        tx.send(n).unwrap();
+        Extra {
+            git: Some(format!("revision {n}")),
+            ..Default::default()
+        }
+    });
+    let state = json!({"thread":{"id":"a","agent":{"state":"working"}}});
+    assert!(worker.latest(&state).git.is_none());
+    assert_eq!(rx.recv_timeout(Duration::from_secs(2)).unwrap(), 1);
+    thread::sleep(Duration::from_millis(1010));
+    assert_eq!(worker.latest(&state).git.as_deref(), Some("revision 1"));
+    assert_eq!(rx.recv_timeout(Duration::from_millis(500)).unwrap(), 2);
+    let end = Instant::now() + Duration::from_secs(1);
+    while worker.latest(&state).git.as_deref() != Some("revision 2") {
+        assert!(Instant::now() < end);
+        thread::yield_now();
+    }
+}

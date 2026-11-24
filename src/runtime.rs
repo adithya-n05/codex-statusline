@@ -36,7 +36,7 @@ impl Key {
 
 pub struct Worker {
     requests: SyncSender<(Key, Value)>,
-    results: Receiver<(Key, Extra)>,
+    results: Receiver<(Key, Instant, Extra)>,
     pending: HashSet<Key>,
     cache: VecDeque<(Key, Instant, Extra)>,
 }
@@ -47,8 +47,9 @@ impl Worker {
         let (tx, results) = mpsc::channel();
         std::thread::spawn(move || {
             for (key, state) in jobs {
+                let started = Instant::now();
                 let data = collect(&state);
-                if tx.send((key, data)).is_err() {
+                if tx.send((key, started, data)).is_err() {
                     break;
                 }
             }
@@ -62,15 +63,19 @@ impl Worker {
     }
 
     pub fn latest(&mut self, state: &Value) -> Extra {
-        for (key, data) in self.results.try_iter() {
+        for (key, started, data) in self.results.try_iter() {
             self.pending.remove(&key);
             self.cache.retain(|(k, _, _)| k != &key);
-            self.cache.push_front((key, Instant::now(), data));
+            self.cache.push_front((key, started, data));
             self.cache.truncate(8);
         }
         let key = Key::from(state);
         let cached = self.cache.iter().find(|(k, _, _)| k == &key);
-        if cached.is_none_or(|(_, when, _)| when.elapsed() >= Duration::from_secs(2))
+        let refresh = match state.pointer("/thread/agent/state").and_then(Value::as_str) {
+            Some("working" | "thinking" | "waiting") => Duration::from_millis(900),
+            _ => Duration::from_secs(2),
+        };
+        if cached.is_none_or(|(_, when, _)| when.elapsed() >= refresh)
             && !self.pending.contains(&key)
             && self.requests.try_send((key.clone(), state.clone())).is_ok()
         {
