@@ -885,3 +885,43 @@ fn visible_output_updates_turn_speed_before_the_first_usage_report() {
     events.push(json!({"type":"event_msg","payload":{"type":"turn_aborted","turn_id":"t"}}));
     assert_eq!(rate(&read(&events, 800)), None);
 }
+
+#[test]
+fn a_large_active_chat_recovers_the_matching_turn_clock_on_the_first_read() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let now = codex_statusline::usage::unix_now();
+    let state = json!({"thread":{"id":"a","agent":{"state":"working"}}});
+    // The start of this turn is outside the bounded first read.
+    observations(
+        &path,
+        &[
+            json!({"type":"ignored","padding":".".repeat(600_000)}),
+            json!({"type":"token_usage_record","payload":{"turn_id":"running","turn_token_usage":{"output_tokens":1000},"thread_token_usage":{"output_tokens":9000}}}),
+        ],
+    );
+    let read = || {
+        let row = common::plain(&rendered(home.path(), state.clone(), ""));
+        row.split("Turn ")
+            .nth(1)
+            .and_then(|s| s.split_whitespace().next()?.parse::<f64>().ok())
+    };
+    assert_eq!(read(), None);
+    let db = Connection::open(home.path().join("thread_history_1.sqlite")).unwrap();
+    db.execute_batch("CREATE TABLE thread_turns(thread_id TEXT, turn_id TEXT, status TEXT, started_at INTEGER, PRIMARY KEY(thread_id,turn_id))").unwrap();
+    for (thread, turn, status) in [
+        ("other", "running", "inProgress"),
+        ("a", "unrelated", "inProgress"),
+        ("a", "running", "completed"),
+    ] {
+        db.execute(
+            "INSERT INTO thread_turns VALUES (?1,?2,?3,?4)",
+            rusqlite::params![thread, turn, status, now - 60],
+        )
+        .unwrap();
+    }
+    assert_eq!(read(), None);
+    db.execute("UPDATE thread_turns SET status='inProgress', started_at=?1 WHERE thread_id='a' AND turn_id='running'", [now-10]).unwrap();
+    let rate = read().expect("rate on the first read of a large active chat");
+    assert!((80.0..=100.1).contains(&rate), "{rate}");
+}

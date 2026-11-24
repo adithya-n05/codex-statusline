@@ -133,8 +133,9 @@ impl History {
     }
 }
 impl Metrics {
-    pub fn merge_recent_speed(&mut self, recent: &Self) {
+    pub fn merge_recent_speed(&mut self, recent: &Self, home: &Path, thread: &str) {
         self.turn_rate.merge_recent(&recent.turn_rate);
+        self.turn_rate.restore_start(home, thread);
         if let Some(speed) = &recent.speed {
             self.speed = Some(speed.clone());
         }

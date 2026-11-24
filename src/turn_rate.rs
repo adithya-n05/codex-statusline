@@ -147,6 +147,21 @@ impl TurnRate {
             *self = recent.clone();
         }
     }
+    pub fn restore_start(&mut self, home: &std::path::Path, thread: &str) {
+        if self.started_ms.is_some() || self.finished {
+            return;
+        }
+        let Some(turn) = self.id.as_deref() else {
+            return;
+        };
+        self.started_ms = crate::storage::open(home, "thread_history_").and_then(|db| {
+            let seconds: i64 = db.query_row(
+                "SELECT started_at FROM thread_turns WHERE thread_id=?1 AND turn_id=?2 AND status='inProgress'",
+                [thread, turn], |row| row.get(0),
+            ).ok()?;
+            seconds.checked_mul(1000)
+        });
+    }
     pub fn label(&self, thread: &Value, now_ms: i64) -> Option<String> {
         if self.finished
             || !matches!(

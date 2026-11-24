@@ -102,11 +102,10 @@ fn main() -> io::Result<ExitCode> {
                             .and_then(|(_, sample)| sample.clone());
                     }
                 }
-                if let Some(recent) = local_home
-                    .as_deref()
-                    .zip(t["id"].as_str())
-                    .and_then(|(h, id)| codex_statusline::storage::rollout(h, id))
-                    .and_then(|path| recent_history.read(&path))
+                if let Some(home) = local_home.as_deref()
+                    && let Some(id) = t["id"].as_str()
+                    && let Some(path) = codex_statusline::storage::rollout(home, id)
+                    && let Some(recent) = recent_history.read(&path)
                 {
                     if awaiting_worker
                         || (native_context_missing
@@ -117,7 +116,7 @@ fn main() -> io::Result<ExitCode> {
                     {
                         extra.history.context = recent.context.clone();
                     }
-                    extra.history.merge_recent_speed(recent);
+                    extra.history.merge_recent_speed(recent, home, id);
                 }
                 if let Some(fresh) = &extra.credits {
                     active_credits = Some(fresh.clone());
