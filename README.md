@@ -1,5 +1,7 @@
 # Codex Statusline
 
+[![CI](https://github.com/adithya-n05/codex-statusline/actions/workflows/check.yml/badge.svg)](https://github.com/adithya-n05/codex-statusline/actions/workflows/check.yml) [![Contributors](https://img.shields.io/github/contributors/adithya-n05/codex-statusline)](https://github.com/adithya-n05/codex-statusline/graphs/contributors) [![Last commit](https://img.shields.io/github/last-commit/adithya-n05/codex-statusline/main)](https://github.com/adithya-n05/codex-statusline/commits/main/) [![MIT license](https://img.shields.io/github/license/adithya-n05/codex-statusline)](LICENSE)
+
 Codex Statusline is a Rust project for the custom footer in Codex CLI. The design fits three screen rows with the standard keyboard shortcuts enabled. The provider is in development.
 
 ## What goes where
@@ -30,7 +32,7 @@ In that shell, run `rustup toolchain install stable --profile minimal --componen
 | `cargo clippy --workspace --all-targets --locked -- -D warnings` | Lint the workspace and its tests. |
 | `cargo build --release --locked` | Build `target/release/codex-statusline`. |
 
-Develop one behavior per cycle. Begin with a failing test, run the full suite before and after the change, then commit and push.
+Develop one behavior per cycle. The [contribution guide](CONTRIBUTING.md) covers testing and review. See the [code of conduct](CODE_OF_CONDUCT.md) for community standards and the [security policy](SECURITY.md) for private reports.
 
 ## Measuring coverage
 
