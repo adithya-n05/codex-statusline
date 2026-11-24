@@ -215,3 +215,54 @@ fn a_temporarily_unwritable_store_retries_only_valid_weekly_samples() {
         .unwrap();
     assert_eq!(count, 1);
 }
+#[test]
+fn spent_credits_replace_the_weekly_gauge_until_that_same_reset() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    account(home.path(), "fixture-account");
+    let now = codex_statusline::usage::unix_now();
+    let reset = now + 259200;
+    let db = Connection::open_in_memory().unwrap();
+    let when = |t: i64| {
+        db.query_row(
+            "SELECT strftime('%Y-%m-%dT%H:%M:%SZ',?1,'unixepoch')",
+            [t],
+            |r| r.get::<_, String>(0),
+        )
+        .unwrap()
+    };
+    let at =
+        |offset: i64, balance: &str| credit_event(&when(reset - 604800 + offset), reset, balance);
+    let run = |state: Value| {
+        let tree = rendered(home.path(), state, "Tools");
+        tree["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| {
+                v.as_str()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| v["children"][0].as_str().unwrap().to_owned())
+            })
+            .collect::<String>()
+    };
+    observations(&path, &[at(0, "60000"), at(48000, "62000")]);
+    let state = credit_state(reset);
+    assert!(run(state.clone()).contains("7D 18% left"));
+    // A balance observed in a separate launch arrives in a different order.
+    observations(&path, &[at(100000, "31000"), at(60000, "46500")]);
+    let usage = run(state.clone());
+    assert!(
+        usage.contains("Credits 31000 / 62000 · 50% left [██████████░░░░░░░░░░] · reset"),
+        "{usage}"
+    );
+    assert!(!usage.contains("7D ") && !usage.contains('≈'));
+    observations(&path, &[at(105000, "33000")]);
+    assert!(run(state.clone()).contains("Credits 33000 / 64000"));
+    observations(&path, &[at(106000, "0")]);
+    assert!(run(state.clone()).contains("Credits 0 / 64000 · 0% left"));
+    assert!(run(credit_state(reset + 604800)).contains("7D 18% left"));
+    assert!(run(credit_state(now - 1)).contains("7D 18% left"));
+    account(home.path(), "second-account");
+    assert!(!run(state).contains("Credits"));
+}

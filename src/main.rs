@@ -48,6 +48,12 @@ fn main() -> io::Result<ExitCode> {
                 }
                 codex_statusline::runtime::Extra {
                     history: metrics,
+                    credits: owner.and_then(|(h, id)| {
+                        let reset =
+                            codex_statusline::usage::weekly_window(&state["account"])?["resets_at"]
+                                .as_i64()?;
+                        codex_statusline::credits::Standing::read(h, id, reset)
+                    }),
                     compaction: home.as_deref().and_then(|h| {
                         codex_statusline::compaction::Sample::load(h, &state["thread"])
                     }),

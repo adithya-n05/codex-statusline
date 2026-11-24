@@ -77,3 +77,61 @@ impl Ledger {
         Ok(())
     }
 }
+#[derive(Clone)]
+pub struct Standing {
+    pub reset: i64,
+    balance: f64,
+    base: f64,
+}
+impl Standing {
+    pub fn read(home: &Path, account: &str, reset: i64) -> Option<Self> {
+        let db = Connection::open_with_flags(
+            home.join("codex-statusline/credits.sqlite3"),
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .ok()?;
+        // Reconstruct in observation order so replaying another chat cannot invent a top up.
+        let mut query = db
+            .prepare("SELECT balance FROM observations WHERE account=?1 AND reset=?2 ORDER BY at")
+            .ok()?;
+        let mut rows = query
+            .query_map(params![account, reset], |r| r.get::<_, f64>(0))
+            .ok()?;
+        let mut balance = rows.next()?.ok()?;
+        let mut base = balance;
+        let mut spent = false;
+        for row in rows {
+            let next = row.ok()?;
+            if next < balance {
+                spent = true;
+            } else {
+                base += next - balance;
+            }
+            balance = next;
+        }
+        (spent && base > 0.).then_some(Self {
+            reset,
+            balance,
+            base,
+        })
+    }
+    pub fn render(&self, now: i64) -> Vec<Value> {
+        let remaining = (100. * self.balance / self.base).clamp(0., 100.);
+        vec![
+            serde_json::json!(format!(
+                "Credits {} / {} · {remaining:.0}% left ",
+                amount(self.balance),
+                amount(self.base)
+            )),
+            crate::layout::gauge(remaining, 100. - remaining),
+            serde_json::json!(format!(
+                " · reset {}",
+                crate::usage::countdown(self.reset.saturating_sub(now))
+            )),
+        ]
+    }
+}
+fn amount(value: f64) -> String {
+    let s = format!("{value:.6}");
+    s.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
