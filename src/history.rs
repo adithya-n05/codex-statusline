@@ -119,9 +119,7 @@ impl History {
             if let Ok(value) = serde_json::from_slice(&record) {
                 let event: &Value = &value;
                 cursor.metrics.activity.observe(event, &mut cursor.seen);
-                if event["type"] == "event_msg" {
-                    cursor.turns.observe(event, &mut cursor.metrics.speed);
-                }
+                cursor.turns.observe(event, &mut cursor.metrics.speed);
                 observe(&value);
                 cursor.metrics.observe(&value);
             }
@@ -153,9 +151,7 @@ pub fn recent(path: &Path) -> Option<Metrics> {
     for bytes in lines {
         if let Ok(event) = serde_json::from_slice::<Value>(&bytes.ok()?) {
             result.context.observe(&event);
-            if event["type"] == "event_msg" {
-                turns.observe(&event, &mut result.speed);
-            }
+            turns.observe(&event, &mut result.speed);
         }
     }
     Some(result)

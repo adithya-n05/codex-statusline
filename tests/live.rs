@@ -572,3 +572,35 @@ fn first_read_groups_reset_clock_drift_before_showing_exhausted_weekly_usage() {
             .contains("CRDTS")
     );
 }
+
+#[test]
+fn throughput_uses_the_response_usage_record_before_a_blocking_tool_returns() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let state = json!({"thread":{"id":"a"}});
+    let start = |ms: u64| json!({"type":"event_msg","payload":{"type":"item_completed","turn_id":"t","started_at_ms":ms,"item":{"type":"Reasoning"}}});
+    let usage = |turn: &str, t: &str, total: u64, n: u64| json!({"timestamp":t,"type":"token_usage_record","payload":{"turn_id":turn,"usage":{"output_tokens":n},"thread_token_usage":{"output_tokens":total}}});
+    let first = usage("t", "2025-01-01T00:00:02Z", 400, 200);
+    let mut events = vec![
+        json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"t"}}),
+        start(1735689600000),
+        usage("other", "2025-01-01T00:00:01Z", 900, 660),
+        first.clone(),
+    ];
+    let check = |events: &[Value], expected: &str| {
+        observations(&path, events);
+        for wait in ["", "Tools"] {
+            let tree = rendered(home.path(), state.clone(), wait);
+            assert!(tree.to_string().contains(expected), "{tree}");
+        }
+    };
+    check(&events, "Live 100 tok/s");
+    events.extend([
+        start(1735689605000), first,
+        json!({"timestamp":"2025-01-01T00:01:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"output_tokens":400},"last_token_usage":{"output_tokens":200}}}}),
+        usage("t","2025-01-01T00:00:06Z",450,50),
+    ]);
+    check(&events, "Live 50 tok/s");
+    events.push(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"t","duration_ms":60000}}));
+    check(&events, "Last 50 tok/s");
+}

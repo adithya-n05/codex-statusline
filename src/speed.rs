@@ -19,7 +19,27 @@ impl Turns {
     }
     pub fn observe(&mut self, event: &Value, last: &mut Option<String>) {
         let timestamp = &event["timestamp"];
-        let event = &event["payload"];
+        let payload = &event["payload"];
+        if event["type"] == "token_usage_record" {
+            if self
+                .active
+                .as_ref()
+                .is_some_and(|(id, _)| payload["turn_id"].as_str() == Some(id))
+                && let Some(total) = payload
+                    .pointer("/thread_token_usage/output_tokens")
+                    .and_then(Value::as_u64)
+                && total > self.cumulative
+                && self.record_rate(timestamp, &payload["usage"]["output_tokens"], last)
+            {
+                self.cumulative = total;
+                self.observed = true;
+            }
+            return;
+        }
+        if event["type"] != "event_msg" {
+            return;
+        }
+        let event = payload;
         if self.partial && self.active.is_none() && event["type"] == "item_completed" {
             self.active = event["turn_id"]
                 .as_str()
@@ -65,12 +85,12 @@ impl Turns {
                     .pointer("/info/total_token_usage/output_tokens")
                     .and_then(Value::as_u64)
                 {
-                    if n > self.cumulative
-                        && let Some(start) = self.output_started_ms.take()
-                        && let Some(rate) = response_rate(start, timestamp, event)
-                    {
-                        self.last_response_rate = Some(rate);
-                        *last = Some(format!("Live {rate:.0} tok/s"));
+                    if n > self.cumulative {
+                        self.record_rate(
+                            timestamp,
+                            &event["info"]["last_token_usage"]["output_tokens"],
+                            last,
+                        );
                     }
                     self.cumulative = n;
                     self.observed = true;
@@ -97,8 +117,25 @@ impl Turns {
             _ => {}
         }
     }
+    fn record_rate(
+        &mut self,
+        timestamp: &Value,
+        output: &Value,
+        last: &mut Option<String>,
+    ) -> bool {
+        let rate = self
+            .output_started_ms
+            .and_then(|start| response_rate(start, timestamp, output));
+        if let Some(rate) = rate {
+            self.output_started_ms = None;
+            self.last_response_rate = Some(rate);
+            *last = Some(format!("Live {rate:.0} tok/s"));
+            return true;
+        }
+        false
+    }
 }
-fn response_rate(start: i64, timestamp: &Value, event: &Value) -> Option<f64> {
+fn response_rate(start: i64, timestamp: &Value, output: &Value) -> Option<f64> {
     let end = time::OffsetDateTime::parse(
         timestamp.as_str()?,
         &time::format_description::well_known::Rfc3339,
@@ -107,8 +144,6 @@ fn response_rate(start: i64, timestamp: &Value, event: &Value) -> Option<f64> {
     .unix_timestamp_nanos()
         / 1_000_000;
     let elapsed = end - i128::from(start);
-    let output = event
-        .pointer("/info/last_token_usage/output_tokens")?
-        .as_u64()?;
+    let output = output.as_u64()?;
     (elapsed > 0 && output > 0).then(|| output as f64 * 1000. / elapsed as f64)
 }
