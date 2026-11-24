@@ -76,6 +76,7 @@ fn main() -> io::Result<ExitCode> {
             });
             let local_home = codex_statusline::account::codex_home();
             let mut startup_sample = None;
+            let mut recent_history = codex_statusline::history::RecentHistory::default();
             protocol::serve(io::stdin().lock(), io::stdout().lock(), |s| {
                 let mut extra = worker.latest(s);
                 let t = &s["thread"];
@@ -89,25 +90,29 @@ fn main() -> io::Result<ExitCode> {
                         t["model"]["id"].clone(),
                         t["usage"]["context"]["context_window_size"].clone(),
                     );
-                    if startup_sample.as_ref().is_none_or(|(k, _, _)| k != &key) {
+                    if startup_sample.as_ref().is_none_or(|(k, _)| k != &key) {
                         let sample = local_home
                             .as_deref()
                             .and_then(|h| codex_statusline::compaction::Sample::load(h, t));
-                        let recent = local_home
-                            .as_deref()
-                            .zip(t["id"].as_str())
-                            .and_then(|(h, id)| codex_statusline::storage::rollout(h, id))
-                            .and_then(|p| codex_statusline::history::recent(&p));
-                        startup_sample = Some((key, sample, recent));
+                        startup_sample = Some((key, sample));
                     }
-                    if let Some((_, sample, recent)) = &startup_sample {
-                        if extra.compaction.is_none() {
-                            extra.compaction = sample.clone();
-                        }
-                        if awaiting_worker && let Some(recent) = recent {
-                            extra.history.context = recent.context.clone();
-                            extra.history.speed = recent.speed.clone();
-                        }
+                    if extra.compaction.is_none() {
+                        extra.compaction = startup_sample
+                            .as_ref()
+                            .and_then(|(_, sample)| sample.clone());
+                    }
+                }
+                if let Some(recent) = local_home
+                    .as_deref()
+                    .zip(t["id"].as_str())
+                    .and_then(|(h, id)| codex_statusline::storage::rollout(h, id))
+                    .and_then(|path| recent_history.read(&path))
+                {
+                    if awaiting_worker {
+                        extra.history.context = recent.context.clone();
+                    }
+                    if let Some(speed) = &recent.speed {
+                        extra.history.speed = Some(speed.clone());
                     }
                 }
                 if let Some(fresh) = &extra.credits {

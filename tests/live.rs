@@ -604,3 +604,52 @@ fn throughput_uses_the_response_usage_record_before_a_blocking_tool_returns() {
     events.push(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"t","duration_ms":60000}}));
     check(&events, "Last 50 tok/s");
 }
+
+#[test]
+fn each_footer_poll_picks_up_a_new_rate_even_with_cached_tool_counts() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let mut log = fs::File::create(&path).unwrap();
+    let mut write_event = |event: Value| writeln!(log, "{event}").unwrap();
+    write_event(json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"t"}}));
+    let start = |ms: u64| json!({"type":"event_msg","payload":{"type":"item_completed","turn_id":"t","started_at_ms":ms,"item":{"type":"AgentMessage"}}});
+    let usage = |time: &str, n: u64, total: u64| json!({"type":"token_usage_record","timestamp":time,"payload":{"turn_id":"t","usage":{"output_tokens":n},"thread_token_usage":{"output_tokens":total}}});
+    write_event(start(1735689600000));
+    write_event(usage("2025-01-01T00:00:02Z", 100, 100));
+    let mut child = Command::new(env!("CARGO_BIN_EXE_codex-statusline"))
+        .env("CODEX_HOME", home.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut input = child.stdin.take().unwrap();
+    let mut output = BufReader::new(child.stdout.take().unwrap());
+    let mut poll = |id: &str| {
+        let request = json!({"id":1,"method":"resources/read","params":{"uri":"ui://codex-statusline/footer","_meta":{"com.openai/codex-statusline-state":{"thread":{"id":id,"agent":{"state":"working"}}}}}});
+        writeln!(input, "{request}").unwrap();
+        input.flush().unwrap();
+        let mut reply = String::new();
+        output.read_line(&mut reply).unwrap();
+        reply
+    };
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        let first = poll("a");
+        if first.contains("Tools") && first.contains("Live 50 tok/s") {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(5));
+    }
+    write_event(start(1735689602000));
+    write_event(usage("2025-01-01T00:00:03Z", 125, 225));
+    let next = poll("a");
+    assert!(next.contains("Live 125 tok/s"), "{next}");
+    assert!(!poll("another").contains("tok/s"));
+    write_event(
+        json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"t","duration_ms":10000}}),
+    );
+    assert!(poll("a").contains("Last 125 tok/s"));
+    drop(input);
+    assert!(child.wait().unwrap().success());
+}

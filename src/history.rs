@@ -135,11 +135,29 @@ impl Metrics {
         self.available.then(|| self.activity.label())
     }
 }
-/// Read a bounded suffix on startup while the worker reconstructs complete thread metrics.
-pub fn recent(path: &Path) -> Option<Metrics> {
-    let mut file = File::open(path).ok()?;
+/// Read the latest measurements independently of the background Git and activity scan.
+#[derive(Default)]
+pub struct RecentHistory {
+    snapshot: Option<(PathBuf, u64, Option<std::time::SystemTime>, Metrics)>,
+}
+impl RecentHistory {
+    pub fn read(&mut self, path: &Path) -> Option<&Metrics> {
+        let file = File::open(path).ok()?;
+        let metadata = file.metadata().ok()?;
+        let length = metadata.len();
+        let modified = metadata.modified().ok();
+        if !self.snapshot.as_ref().is_some_and(|(prev, size, time, _)| {
+            prev == path && *size == length && modified.is_some() && *time == modified
+        }) {
+            let data = recent(file, length)?;
+            self.snapshot = Some((path.to_owned(), length, modified, data));
+        }
+        self.snapshot.as_ref().map(|(_, _, _, data)| data)
+    }
+}
+/// A large chat can still supply its latest measurement in one native footer read.
+fn recent(mut file: File, length: u64) -> Option<Metrics> {
     const BYTES: u64 = 512 * 1024;
-    let length = file.metadata().ok()?.len();
     let offset = length.saturating_sub(BYTES);
     file.seek(SeekFrom::Start(offset)).ok()?;
     let mut lines = BufReader::new(file.take(length - offset)).split(b'\n');
