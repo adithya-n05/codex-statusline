@@ -83,8 +83,9 @@ pub struct Standing {
     balance: f64,
     base: f64,
 }
-// The CLI derives its reset timestamp from a rounded seconds-until-reset value.
-const RESET_TOLERANCE_SECONDS: i64 = 2;
+// Separate Codex responses derive the same weekly boundary from relative clocks.
+// Allow a minute of skew while keeping consecutive weeks distinct.
+const RESET_TOLERANCE_SECONDS: i64 = 60;
 impl Standing {
     pub fn active(home: &Path, account: &str, now: i64) -> Option<Self> {
         let db = Connection::open_with_flags(
@@ -94,7 +95,7 @@ impl Standing {
         .ok()?;
         let reset = db
             .query_row(
-                "SELECT max(reset) FROM observations WHERE account=?1 AND reset>?2 AND reset<=?3",
+                "SELECT reset FROM observations WHERE account=?1 AND reset>?2 AND reset<=?3 ORDER BY at DESC, reset LIMIT 1",
                 params![
                     account,
                     now,

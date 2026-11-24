@@ -530,3 +530,41 @@ fn the_first_footer_read_restores_speed_from_a_recent_response_in_a_large_chat()
     let absent = rendered(home.path(), json!({"thread":{"id":"different"}}), "");
     assert!(!absent.to_string().contains("Last 100"));
 }
+
+#[test]
+fn first_read_groups_reset_clock_drift_before_showing_exhausted_weekly_usage() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    account(home.path(), "fixture-account");
+    let now = codex_statusline::usage::unix_now();
+    let reset = now + 4500;
+    let stamp = |at: i64| {
+        Connection::open_in_memory()
+            .unwrap()
+            .query_row("SELECT datetime(?1,'unixepoch')", [at], |r| {
+                r.get::<_, String>(0)
+            })
+            .unwrap()
+    };
+    observations(
+        &path,
+        &[
+            credit_event(&stamp(now - 20000), reset - 8, "5000"),
+            credit_event(&stamp(now - 900), reset + 3, "6500"),
+            credit_event(&stamp(now - 10), reset, "5800"),
+        ],
+    );
+    rendered(home.path(), credit_state(reset), "Tools");
+    for clock in [reset, reset + 3, reset - 8] {
+        let mut state = credit_state(clock);
+        state["account"]["rate_limits"][0]["primary_limit"]["used_percent"] = json!(100);
+        let first = rendered(home.path(), state, "").to_string();
+        assert!(first.contains("CRDTS 5,800 / 6,500"), "{first}");
+        assert!(!first.contains("WKLY"));
+    }
+    assert!(
+        !rendered(home.path(), credit_state(reset + 604800), "")
+            .to_string()
+            .contains("CRDTS")
+    );
+}
