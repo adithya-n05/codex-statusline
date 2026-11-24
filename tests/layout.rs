@@ -37,3 +37,24 @@ fn field_controls_cannot_change_row_count_or_inject_terminal_sequences() {
     assert!(!row.chars().any(char::is_control));
     assert_eq!(visible(&row), "one x  y z");
 }
+#[test]
+fn twenty_cell_bar_uses_bathory_colors_and_clamps_bounds() {
+    use codex_statusline::layout::gauge;
+    for (filled, pressure, blocks, color) in [
+        (-3., 0., 0, "#5F8787"),
+        (25., 49.9, 5, "#5F8787"),
+        (50., 50., 10, "#FBCB97"),
+        (75., 75., 15, "#E78A53"),
+        (90., 89.99, 18, "#E78A53"),
+        (100., 90., 20, "#E05252"),
+        (110., 110., 20, "#E05252"),
+    ] {
+        let result = gauge(filled, pressure);
+        assert_eq!(result["props"]["color"], color);
+        let text = result["children"][0].as_str().unwrap();
+        assert_eq!(
+            text,
+            format!("[{}{}]", "█".repeat(blocks), "░".repeat(20 - blocks))
+        );
+    }
+}

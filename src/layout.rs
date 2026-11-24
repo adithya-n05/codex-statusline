@@ -26,3 +26,17 @@ pub fn footer(first: &str, middle: Vec<serde_json::Value>, last: &str) -> serde_
     children.extend([json!("\n"), json!(fixed_line(last))]);
     json!({"type":"text","children":children})
 }
+pub fn gauge(filled_percent: f64, pressure_percent: f64) -> serde_json::Value {
+    let filled = (filled_percent.clamp(0.0, 100.0) / 5.0).round() as usize;
+    let color = if pressure_percent >= 90.0 {
+        "#E05252"
+    } else if pressure_percent >= 75.0 {
+        "#E78A53"
+    } else if pressure_percent >= 50.0 {
+        "#FBCB97"
+    } else {
+        "#5F8787"
+    };
+    let bar = format!("[{}{}]", "█".repeat(filled), "░".repeat(20 - filled));
+    serde_json::json!({"type":"text","props":{"color":color},"children":[bar]})
+}
