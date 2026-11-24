@@ -9,5 +9,13 @@ pub fn render(state: &Value) -> Value {
         .get("workspace")
         .and_then(|w| w["cwd"].as_str())
         .unwrap_or("");
-    footer(cwd, Vec::new(), "")
+    let mut first = vec![cwd];
+    if let Some(name) = thread
+        .get("name")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty())
+    {
+        first.push(name);
+    }
+    footer(&first.join(" · "), Vec::new(), "")
 }
