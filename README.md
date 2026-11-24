@@ -49,9 +49,9 @@ The provider keeps timestamped balance observations for the signed in account un
 
 **API usage.** A chat using an API key shows its reported input and output tokens and the CLI’s dollar estimate when available. That estimate covers the thread. Codex supplies the pricing data. Usage across every chat or the whole API key requires separate billing access.
 
-**Output speed.** During a turn, `Turn 42.1 tok/s` gives the average output rate since the turn began, including time spent waiting for tools. If Codex saves an assistant message or a public reasoning summary before it reports the token count, `Turn est.` includes that text at roughly four UTF8 bytes per token. The measured count replaces the estimate when it arrives. Tool output adds no tokens to the estimate. A response can stream on screen before any of its text reaches the session file.
+**Output speed.** While a tool runs, `Latest 50 tok/s` shows how fast the model generated the response that requested it. The count covers reasoning and every call in that response. The clock runs from the earliest recorded output start to the usage report. The reading stays visible while the tool executes. At the end of the turn, `Last` shows the most recent measured response rate.
 
-When the turn’s start time is unavailable, `Latest` shows the most recent measured response rate. `Last` keeps that rate after the turn ends. Older chats may only have timing for the whole turn.
+`Turn` gives the average since the turn began, including time spent waiting for tools. Before the official count arrives, `Turn est.` estimates output from saved assistant text, public reasoning summaries, and generated tool names and arguments at roughly four UTF8 bytes per token. Codex saves a tool request once its arguments are complete, so the footer can update in jumps. Text returned by a tool is input to the model. Older chats may only have timing for the whole turn.
 
 **Tool activity.** A batch of three shell requests adds three to both `Tools` and `Shell`. Start and completion records with the same request ID count once. Terminal input and polls appear under `Terminal I/O`. A failed request stays in its category and also counts toward `Failed`.
 
