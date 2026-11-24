@@ -88,6 +88,11 @@ pub fn render_enriched(
     .collect::<Vec<_>>()
     .join(" · ");
     let context = &state["thread"]["usage"]["context"];
+    let recovered = extra
+        .compaction
+        .as_ref()
+        .map(|sample| sample.restore(context));
+    let context = recovered.as_ref().unwrap_or(context);
     let pressure = extra.compaction.as_ref().and_then(|s| s.pressure(context));
     let mut middle = crate::usage::context(context, pressure);
     let now = crate::usage::unix_now();

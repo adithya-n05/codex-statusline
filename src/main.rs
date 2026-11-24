@@ -74,8 +74,28 @@ fn main() -> io::Result<ExitCode> {
                     git: cwd.and_then(|p| codex_statusline::git::summary(std::path::Path::new(p))),
                 }
             });
+            let local_home = codex_statusline::account::codex_home();
+            let mut startup_sample = None;
             protocol::serve(io::stdin().lock(), io::stdout().lock(), |s| {
                 let mut extra = worker.latest(s);
+                let t = &s["thread"];
+                if extra.compaction.is_none()
+                    && t.pointer("/usage/context/used_percentage")
+                        .is_none_or(|v| v.is_null())
+                {
+                    let key = (
+                        t["id"].clone(),
+                        t["model"]["id"].clone(),
+                        t["usage"]["context"]["context_window_size"].clone(),
+                    );
+                    if startup_sample.as_ref().is_none_or(|(k, _)| k != &key) {
+                        let sample = local_home
+                            .as_deref()
+                            .and_then(|h| codex_statusline::compaction::Sample::load(h, t));
+                        startup_sample = Some((key, sample));
+                    }
+                    extra.compaction = startup_sample.as_ref().and_then(|(_, s)| s.clone());
+                }
                 if let Some(fresh) = &extra.credits {
                     active_credits = Some(fresh.clone());
                 } else {

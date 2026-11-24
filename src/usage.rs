@@ -15,6 +15,8 @@ pub fn context(value: &Value, compaction_pressure: Option<f64>) -> Vec<Value> {
         line.push(gauge(pct, compaction_pressure.unwrap_or(pct.min(89.))));
     } else if window.is_some() {
         line.push(json!("CTX —"));
+    } else {
+        line.push(json!("Context awaiting usage"));
     }
     if let Some(n) = window {
         line.push(json!(format!(" / {n}")));

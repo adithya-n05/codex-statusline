@@ -88,7 +88,11 @@ fn context_uses_the_displayed_models_window_and_native_percentage() {
         ),
         (json!({"context_window_size":800000}), "CTX —", " / 800000"),
         (json!({"used_percentage":12}), "CTX 12% [", "]"),
-        (json!({"context_window_size":0}), "", ""),
+        (
+            json!({"context_window_size":0}),
+            "Context awaiting usage",
+            "",
+        ),
     ] {
         let text = screen(json!({"usage":{"context":context}}));
         let row = text.split('\n').nth(1).unwrap();

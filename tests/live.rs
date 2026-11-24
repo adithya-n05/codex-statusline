@@ -364,3 +364,40 @@ fn spent_credits_survive_cold_start_missing_limits_and_a_slow_thread_refresh() {
             .contains("Credits 450")
     );
 }
+#[test]
+fn idle_resume_restores_the_recorded_context_before_the_first_turn() {
+    let home = tempfile::tempdir().unwrap();
+    fs::write(index(home.path()), "").unwrap();
+    let db = Connection::open(home.path().join("logs_1.sqlite")).unwrap();
+    db.execute_batch("CREATE TABLE logs(id INTEGER PRIMARY KEY,thread_id TEXT,target TEXT,feedback_log_body TEXT);
+    INSERT INTO logs VALUES(1,'a','codex_core::session::turn','span model=new-model effort=xhigh}: post sampling token usage total_usage_tokens=135200 auto_compact_scope_tokens=135200 auto_compact_scope_limit=Some(244800) auto_compact_limit_scope=Total full_context_window_limit=Some(258400)');").unwrap();
+    let read = |id: &str, model: &str, context: Value| {
+        rendered(
+            home.path(),
+            json!({"thread":{"id":id,"model":{"id":model},"usage":{"context":context}}}),
+            "",
+        )
+        .to_string()
+    };
+    let idle = read("a", "new-model", json!({}));
+    assert!(
+        idle.contains("CTX 50%") && idle.contains("258400"),
+        "{idle}"
+    );
+    assert!(
+        read(
+            "a",
+            "new-model",
+            json!({"used_percentage":61,"context_window_size":258400})
+        )
+        .contains("CTX 61%")
+    );
+    for (id, model) in [("b", "new-model"), ("a", "other")] {
+        let row = read(id, model, json!({}));
+        assert!(
+            row.contains("Context awaiting usage") && !row.contains("258400"),
+            "{row}"
+        );
+    }
+    assert!(!read("a", "new-model", json!({"context_window_size":800000})).contains("258400"));
+}
