@@ -1,0 +1,2 @@
+[alias]
+coverage = "llvm-cov --locked --workspace --all-targets --fail-under-lines 90 --fail-under-file-lines 90"
