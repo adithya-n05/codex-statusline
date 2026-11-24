@@ -18,6 +18,7 @@ fn main() -> io::Result<ExitCode> {
             };
             let live_account = account_id.clone();
             let mut active_credits = None;
+            let mut weekly = codex_statusline::weekly::Weekly::default();
             let mut live_ledger = codex_statusline::credits::Ledger::default();
             let mut ledger = codex_statusline::credits::Ledger::default();
             let mut worker = codex_statusline::runtime::Worker::new(move |state| {
@@ -57,6 +58,7 @@ fn main() -> io::Result<ExitCode> {
                         .and_then(|(h, id)| codex_statusline::storage::saved_name(h, id)),
                     credits: None,
                     measured_context: None,
+                    weekly_account: None,
                     compaction: home.as_deref().and_then(|h| {
                         codex_statusline::compaction::Sample::load(h, &state["thread"])
                     }),
@@ -104,6 +106,7 @@ fn main() -> io::Result<ExitCode> {
                     && let Some(recent) = recent_history.read_with(&path, |event| {
                         if owns_rollout {
                             live_ledger.observe(event);
+                            weekly.observe(event);
                         }
                     })
                 {
@@ -125,7 +128,10 @@ fn main() -> io::Result<ExitCode> {
                         account,
                         std::time::Duration::from_millis(15),
                     );
-                    let reset = codex_statusline::usage::weekly_window(&s["account"])
+                    extra.weekly_account =
+                        weekly.account(&s["account"], codex_statusline::usage::unix_now());
+                    let effective_account = extra.weekly_account.as_ref().unwrap_or(&s["account"]);
+                    let reset = codex_statusline::usage::weekly_window(effective_account)
                         .and_then(|w| w["resets_at"].as_i64());
                     let fresh = match reset {
                         Some(at) => codex_statusline::credits::Standing::read(home, account, at),

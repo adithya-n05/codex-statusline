@@ -94,6 +94,9 @@ pub struct Standing {
 // Separate Codex responses derive the same weekly boundary from relative clocks.
 // Allow a minute of skew while keeping consecutive weeks distinct.
 const RESET_TOLERANCE_SECONDS: i64 = 60;
+pub(crate) fn same_week(a: i64, b: i64) -> bool {
+    a.abs_diff(b) <= RESET_TOLERANCE_SECONDS as u64
+}
 impl Standing {
     pub fn active(home: &Path, account: &str, now: i64) -> Option<Self> {
         let db = Connection::open_with_flags(
@@ -116,7 +119,7 @@ impl Standing {
         Self::read(home, account, reset)
     }
     pub fn matches_reset(&self, live: i64) -> bool {
-        self.reset.abs_diff(live) <= RESET_TOLERANCE_SECONDS as u64
+        same_week(self.reset, live)
     }
     pub fn read(home: &Path, account: &str, reset: i64) -> Option<Self> {
         let db = Connection::open_with_flags(

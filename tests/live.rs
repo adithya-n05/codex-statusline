@@ -1083,3 +1083,54 @@ fn context_uses_newer_session_measurements_while_the_host_snapshot_catches_up() 
     .unwrap();
     assert!(session.poll(&native).contains("CTX 12% used"));
 }
+
+#[test]
+fn weekly_allowance_uses_the_next_report_for_the_signed_in_accounts_week() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    account(home.path(), "fixture-account");
+    let mut session = provider::Provider::open(home.path());
+    let now = codex_statusline::usage::unix_now();
+    let reset = now + 3600;
+    let mut f = fs::File::create(&path).unwrap();
+    let db = Connection::open_in_memory().unwrap();
+    let sample = |seconds, used: u64, resets, limit: &str| {
+        let ts = db
+            .query_row(
+                "SELECT strftime('%Y-%m-%dT%H:%M:%SZ',?1,'unixepoch')",
+                [now - seconds],
+                |r| r.get::<_, String>(0),
+            )
+            .unwrap();
+        json!({"timestamp":ts,"type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":limit,
+            "secondary":{"window_minutes":10080,"used_percent":used,"resets_at":resets}}}})
+    };
+    let mut host = credit_state(reset);
+    host["account"]["rate_limits"][0]["primary_limit"]["used_percent"] = json!(10);
+    writeln!(f, "{}", sample(10, 10, reset, "codex")).unwrap();
+    assert!(session.poll(&host).contains("WKLY 90% left"));
+    writeln!(f, "{}", sample(8, 16, reset + 1, "codex")).unwrap();
+    assert!(session.poll(&host).contains("WKLY 84% left"));
+    assert!(session.poll(&host).contains("WKLY 84% left"));
+    for event in [
+        sample(12, 60, reset, "codex"),
+        sample(5, 80, reset, "other"),
+    ] {
+        writeln!(f, "{event}").unwrap();
+        assert!(session.poll(&host).contains("WKLY 84% left"));
+    }
+    host["account"]["rate_limits"][0]["primary_limit"]["used_percent"] = json!(20);
+    assert!(session.poll(&host).contains("WKLY 80% left"));
+    let empty = json!({"thread":{"id":"a"}});
+    assert!(session.poll(&empty).contains("WKLY 80% left"));
+    writeln!(f, "{}", sample(4, 25, reset, "codex")).unwrap();
+    assert!(session.poll(&empty).contains("WKLY 75% left"));
+    assert!(
+        session
+            .poll(&credit_state(reset + 604800))
+            .contains("WKLY 18% left")
+    );
+    account(home.path(), "different-account");
+    let mut foreign = provider::Provider::open(home.path());
+    assert!(!foreign.poll(&empty).contains("WKLY"));
+}

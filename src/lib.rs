@@ -14,3 +14,4 @@ pub mod statusline;
 pub mod storage;
 mod turn_rate;
 pub mod usage;
+pub mod weekly;

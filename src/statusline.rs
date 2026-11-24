@@ -125,8 +125,8 @@ pub fn render_enriched(
     let mut middle = crate::usage::context(context, pressure);
     let now_ms = crate::usage::unix_now_ms();
     let now = now_ms / 1000;
-    let live_reset =
-        crate::usage::weekly_window(&state["account"]).and_then(|w| w["resets_at"].as_i64());
+    let account = extra.weekly_account.as_ref().unwrap_or(&state["account"]);
+    let live_reset = crate::usage::weekly_window(account).and_then(|w| w["resets_at"].as_i64());
     crate::layout::paint_gauge_labels(&mut middle);
     let mut weekly =
         if matches!(identity, crate::account::Identity::Api) {
@@ -137,7 +137,7 @@ pub fn render_enriched(
             }) {
                 credit.render(now)
             } else {
-                crate::usage::weekly(&state["account"], now)
+                crate::usage::weekly(account, now)
             }
         };
     if !middle.is_empty() && !weekly.is_empty() {
