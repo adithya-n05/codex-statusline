@@ -96,7 +96,7 @@ fn generated_requests_affect_the_next_speed_read_before_usage_is_reported() {
     ] {
         chat.append(ignored);
     }
-    assert!(!chat.row().contains("tok/s"));
+    assert!(chat.row().contains("Turn est. 0.0 tok/s"));
     chat.append(function.clone());
     chat.append(function.clone());
     let estimate = |row: &str, low, high| {
@@ -111,15 +111,11 @@ fn generated_requests_affect_the_next_speed_read_before_usage_is_reported() {
     chat.append(json!({"type":"event_msg","payload":{"type":"item_completed","turn_id":"turn","item":{"type":"CommandExecution","id":"nested","command":"x".repeat(9999),"aggregated_output":"y".repeat(9999)}}}));
     estimate(&chat.row(), 19.0, 20.1);
     chat.append(chat.report(12, 750, 750));
-    let measured = chat.row();
-    assert!(
-        measured.contains("Turn ") && !measured.contains("Turn est."),
-        "{measured}"
-    );
+    estimate(&chat.row(), 7.0, 7.6);
     let mut replay = function;
     replay["timestamp"] = json!(chat.stamp(13));
     chat.append(replay);
-    assert!(!chat.row().contains("Turn est."));
+    estimate(&chat.row(), 7.0, 7.6);
     chat.append(json!({"type":"event_msg","payload":{"type":"turn_aborted","turn_id":"turn"}}));
     chat.append(chat.call(
         "late",
@@ -144,7 +140,7 @@ fn hosted_tool_estimates_use_only_the_recorded_request_parameters() {
         p.insert("id".into(), json!("hosted"));
         p.insert("result".into(), json!("x".repeat(20000)));
         chat.append(record.clone());
-        assert!(!chat.row().contains("tok/s"), "{kind}");
+        assert!(chat.row().contains("Turn est. 0.0 tok/s"), "{kind}");
         record["payload"][field] = json!({"query":"é".repeat(2000)});
         chat.append(record);
         let row = chat.row();
@@ -174,7 +170,7 @@ fn latest_response_speed_includes_generation_of_tool_only_replies() {
         json!(chat.start as f64 + 10.25);
     chat.append(call.clone());
     chat.append(chat.report(15, 190, 190)); // 190 tokens in 4.75 seconds.
-    assert!(chat.provider.poll(&idle_view).contains("Latest 40 tok/s"));
+    assert!(!chat.provider.poll(&idle_view).contains("tok/s"));
     chat.append(call);
     chat.append(chat.call(
         "first",
@@ -182,7 +178,7 @@ fn latest_response_speed_includes_generation_of_tool_only_replies() {
         40,
     ));
     chat.append(json!({"timestamp":chat.stamp(40),"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"output_tokens":190},"total_token_usage":{"output_tokens":190}}}}));
-    assert!(chat.provider.poll(&idle_view).contains("Latest 40 tok/s"));
+    assert!(!chat.provider.poll(&idle_view).contains("tok/s"));
     let reasoning = json!({"timestamp":chat.stamp(47),"type":"event_msg","payload":{"type":"item_completed","turn_id":"turn","started_at_ms":(chat.start+44)*1000,"item":{"type":"Reasoning","id":"reason"}}});
     chat.append(reasoning);
     for (id, offset) in [("second", 47), ("third", 48)] {
@@ -196,7 +192,7 @@ fn latest_response_speed_includes_generation_of_tool_only_replies() {
         chat.append(call);
     }
     chat.append(chat.report(50, 550, 360)); // One response, including reasoning and both calls, in six seconds.
-    assert!(chat.provider.poll(&idle_view).contains("Latest 60 tok/s"));
+    assert!(!chat.provider.poll(&idle_view).contains("tok/s"));
     chat.append(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"turn","duration_ms":90000}}));
     assert!(chat.provider.poll(&idle_view).contains("Last 60 tok/s"));
 }
@@ -229,50 +225,55 @@ fn invalid_or_missing_tool_creation_times_cannot_supply_a_generation_rate() {
 }
 
 #[test]
-fn a_running_tool_shows_the_latest_generation_rate_instead_of_hiding_it_in_the_turn_average() {
+fn the_live_turn_rate_changes_on_quiet_polls_and_counts_newly_written_output() {
     let mut chat = Chat::open();
+    fn rate(row: &str) -> f64 {
+        assert!(!row.contains("Latest") && !row.contains("Last "), "{row}");
+        row.split("Turn est. ")
+            .nth(1)
+            .unwrap()
+            .split_whitespace()
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap()
+    }
     let mut call = chat.call(
         "code",
-        json!({"type":"custom_tool_call","name":"exec","input":"x".repeat(4000)}),
+        json!({"type":"custom_tool_call","name":"exec","input":"abcd"}),
         25,
     );
     call["payload"]["internal_chat_message_metadata_passthrough"]["create_time"] =
         json!(chat.start + 20);
     chat.append(call);
-    chat.append(chat.report(26, 300, 300));
-    assert!(chat.row().contains("Latest 50 tok/s"));
+    chat.append(chat.report(26, 30000, 30000));
+    let first = rate(&chat.row());
+    assert!((285.0..=300.1).contains(&first), "{first}");
+    std::thread::sleep(std::time::Duration::from_millis(200));
     chat.append(chat.call(
         "code",
-        json!({"type":"custom_tool_call_output","output":"result".repeat(3000)}),
+        json!({"type":"custom_tool_call_output","output":"x".repeat(40000)}),
         70,
     ));
-    assert!(
-        chat.provider
-            .poll(&json!({"thread":{"id":"chat","agent":{"state":"waiting"}}}))
-            .contains("Latest 50 tok/s")
-    );
-    chat.append(json!({"type":"event_msg","payload":{"type":"item_completed","turn_id":"turn","started_at_ms":(chat.start+72)*1000,"item":{"type":"Reasoning","id":"thinking"}}}));
+    let quiet = chat
+        .provider
+        .poll(&json!({"thread":{"id":"chat","agent":{"state":"waiting"}}}));
+    assert!(rate(&quiet) < first, "{quiet}");
     chat.append(chat.call(
         "next",
-        json!({"type":"function_call","name":"lookup","arguments":"{}"}),
+        json!({"type":"function_call","name":"lookup","arguments":"b".repeat(40000)}),
         74,
     ));
-    assert!(chat.row().contains("Turn est."));
-    chat.append(chat.report(75, 510, 210));
-    assert!(chat.row().contains("Latest 70 tok/s"));
-    chat.append(json!({"type":"event_msg","payload":{"type":"item_completed","turn_id":"turn","started_at_ms":(chat.start+76)*1000,"item":{"type":"AgentMessage","id":"answer"}}}));
-    chat.append(chat.report(78, 610, 100));
-    let text_response = chat.row();
-    assert!(
-        text_response.contains("Turn ") && !text_response.contains("Latest 70"),
-        "{text_response}"
-    );
+    let generated = rate(&chat.row());
+    assert!(generated > first + 80.0);
+    chat.append(chat.report(75, 36000, 6000));
+    assert!(rate(&chat.row()) < generated);
     chat.append(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"turn","duration_ms":80000}}));
-    assert!(chat.row().contains("Last 50 tok/s"));
+    assert!(chat.row().contains("Last "));
 }
 
 #[test]
-fn a_new_usage_report_times_the_whole_tool_response_in_a_large_chat() {
+fn a_new_usage_report_updates_the_live_turn_in_a_large_chat() {
     let mut chat = Chat::open();
     chat.append(json!({"type":"event_msg","payload":{"type":"item_completed","turn_id":"turn","started_at_ms":(chat.start+10)*1000,"item":{"type":"Reasoning","id":"r"}}}));
     let mut call = chat.call(
@@ -292,5 +293,8 @@ fn a_new_usage_report_times_the_whole_tool_response_in_a_large_chat() {
     }
     chat.append(chat.report(20, 400, 400));
     let row = chat.row();
-    assert!(row.contains("Latest 40 tok/s"), "{row}");
+    assert!(
+        row.contains("Turn est. 4.0 tok/s") || row.contains("Turn est. 3.9 tok/s"),
+        "{row}"
+    );
 }

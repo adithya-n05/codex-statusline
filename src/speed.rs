@@ -1,12 +1,5 @@
 use serde_json::Value;
 
-#[derive(Clone)]
-pub(crate) struct ToolMeasurement {
-    pub turn: String,
-    pub at: i64,
-    pub rate: f64,
-}
-
 #[derive(Clone, Default)]
 pub struct Turns {
     cumulative: u64,
@@ -16,8 +9,6 @@ pub struct Turns {
     active: Option<(String, u64)>,
     observed: bool,
     output_started_ms: Option<i64>,
-    includes_tool: bool,
-    pub(crate) latest_tool: Option<ToolMeasurement>,
     last_response_rate: Option<f64>,
 }
 
@@ -40,7 +31,6 @@ impl Turns {
             if self.partial && self.active.is_none() {
                 self.active = call.turn.map(|id| (id.to_owned(), self.cumulative));
             }
-            self.includes_tool = true;
             if let Some(start) = call.created_ms {
                 self.include_start(start);
             }
@@ -58,7 +48,7 @@ impl Turns {
             {
                 self.response_cumulative = total;
                 self.awaiting_native_mirror = payload["usage"]["output_tokens"].as_u64();
-                self.record_rate(timestamp, &payload["usage"]["output_tokens"], last);
+                self.record_rate(timestamp, &payload["usage"]["output_tokens"]);
             }
             return;
         }
@@ -76,8 +66,6 @@ impl Turns {
                 self.active = event["turn_id"]
                     .as_str()
                     .map(|id| (id.into(), self.cumulative));
-                self.latest_tool = None;
-                self.includes_tool = false;
                 self.response_cumulative = 0;
                 self.awaiting_native_mirror = None;
                 self.observed = false;
@@ -125,7 +113,6 @@ impl Turns {
                         self.record_rate(
                             timestamp,
                             &event["info"]["last_token_usage"]["output_tokens"],
-                            last,
                         );
                     }
                     self.cumulative = n;
@@ -156,31 +143,21 @@ impl Turns {
     fn include_start(&mut self, start: i64) {
         self.output_started_ms = Some(self.output_started_ms.map_or(start, |old| old.min(start)));
     }
-    fn record_rate(&mut self, timestamp: &Value, output: &Value, last: &mut Option<String>) {
-        let includes_tool = std::mem::take(&mut self.includes_tool);
+    fn record_rate(&mut self, timestamp: &Value, output: &Value) {
         let rate = self
             .output_started_ms
             .and_then(|start| response_rate(start, timestamp, output));
-        self.latest_tool = None;
-        if let Some((at, rate)) = rate {
-            if includes_tool && let Some((turn, _)) = &self.active {
-                self.latest_tool = Some(ToolMeasurement {
-                    turn: turn.clone(),
-                    at,
-                    rate,
-                });
-            }
+        if let Some(rate) = rate {
             self.output_started_ms = None;
             self.last_response_rate = Some(rate);
-            *last = Some(format!("Latest {rate:.0} tok/s"));
         }
     }
 }
-fn response_rate(start: i64, timestamp: &Value, output: &Value) -> Option<(i64, f64)> {
+fn response_rate(start: i64, timestamp: &Value, output: &Value) -> Option<f64> {
     let end = timestamp_ms(timestamp)?;
     let elapsed = i128::from(end) - i128::from(start);
     let output = output.as_u64()?;
-    (elapsed > 0 && output > 0).then(|| (end, output as f64 * 1000. / elapsed as f64))
+    (elapsed > 0 && output > 0).then(|| output as f64 * 1000. / elapsed as f64)
 }
 pub(crate) fn timestamp_ms(timestamp: &Value) -> Option<i64> {
     let ns = time::OffsetDateTime::parse(

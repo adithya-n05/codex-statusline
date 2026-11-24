@@ -151,9 +151,6 @@ impl Metrics {
         self.turn_rate.restore_start(home, thread);
         if let Some(speed) = &recent.speed {
             self.speed = Some(speed.clone());
-            self.responses
-                .latest_tool
-                .clone_from(&recent.responses.latest_tool);
         }
     }
     pub fn tools_label(&self) -> Option<String> {

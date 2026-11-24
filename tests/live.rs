@@ -469,13 +469,13 @@ fn generation_speed_updates_between_model_responses_without_charging_tool_waits(
         observations(&path, events);
         rendered(home.path(), state.clone(), "Tools").to_string()
     };
-    assert!(read(&events).contains("Latest 100 tok/s"));
+    assert!(!read(&events).contains("tok/s"));
     events.push(event("2025-01-01T00:00:52Z",json!({"type":"item_completed","turn_id":"one","started_at_ms":1735689602000u64,"item":{"type":"CommandExecution","id":"cmd"}})));
     events.push(output("other", 1735689602000));
     events.push(output("one", 1735689652000));
     events.push(count("2025-01-01T00:00:52Z", 200, 200));
     events.push(count("2025-01-01T00:00:53.500Z", 425, 225));
-    assert!(read(&events).contains("Latest 150 tok/s"));
+    assert!(!read(&events).contains("tok/s"));
     events.push(event(
         "2025-01-01T00:01:00Z",
         json!({"type":"task_complete","turn_id":"one","duration_ms":60000}),
@@ -601,13 +601,18 @@ fn throughput_uses_the_response_usage_record_before_a_blocking_tool_returns() {
             assert!(tree.to_string().contains(expected), "{tree}");
         }
     };
-    check(&events, "Latest 100 tok/s");
+    let ended = |events: &[Value]| {
+        let mut out = events.to_vec();
+        out.push(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"t","duration_ms":60000}}));
+        out
+    };
+    check(&ended(&events), "Last 100 tok/s");
     events.extend([
         start(1735689605000), first,
         json!({"timestamp":"2025-01-01T00:01:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"output_tokens":400},"last_token_usage":{"output_tokens":200}}}}),
         usage("t","2025-01-01T00:00:06Z",450,50),
     ]);
-    check(&events, "Latest 50 tok/s");
+    check(&ended(&events), "Last 50 tok/s");
     events.push(json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"t","duration_ms":60000}}));
     check(&events, "Last 50 tok/s");
 }
@@ -618,9 +623,12 @@ fn each_footer_poll_picks_up_a_new_rate_even_with_cached_tool_counts() {
     let path = index(home.path());
     let mut log = fs::File::create(&path).unwrap();
     let mut write_event = |event: Value| writeln!(log, "{event}").unwrap();
-    write_event(json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"t"}}));
+    let started = codex_statusline::usage::unix_now() - 10;
+    write_event(
+        json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"t","started_at":started}}),
+    );
     let start = |ms: u64| json!({"type":"event_msg","payload":{"type":"item_completed","turn_id":"t","started_at_ms":ms,"item":{"type":"AgentMessage"}}});
-    let usage = |time: &str, n: u64, total: u64| json!({"type":"token_usage_record","timestamp":time,"payload":{"turn_id":"t","usage":{"output_tokens":n},"thread_token_usage":{"output_tokens":total}}});
+    let usage = |time: &str, n: u64, total: u64| json!({"type":"token_usage_record","timestamp":time,"payload":{"turn_id":"t","usage":{"output_tokens":n},"turn_token_usage":{"output_tokens":total},"thread_token_usage":{"output_tokens":total}}});
     write_event(start(1735689600000));
     write_event(usage("2025-01-01T00:00:02Z", 100, 100));
     let mut child = Command::new(env!("CARGO_BIN_EXE_codex-statusline"))
@@ -640,18 +648,25 @@ fn each_footer_poll_picks_up_a_new_rate_even_with_cached_tool_counts() {
         reply
     };
     let deadline = Instant::now() + Duration::from_secs(3);
-    loop {
+    let rate = |row: &str| {
+        row.split("Turn est. ")
+            .nth(1)
+            .and_then(|v| v.split_whitespace().next()?.parse::<f64>().ok())
+    };
+    let previous = loop {
         let first = poll("a");
-        if first.contains("Tools") && first.contains("Latest 50 tok/s") {
-            break;
+        if first.contains("Tools")
+            && let Some(n) = rate(&first)
+        {
+            break n;
         }
         assert!(Instant::now() < deadline);
         thread::sleep(Duration::from_millis(5));
-    }
+    };
     write_event(start(1735689602000));
     write_event(usage("2025-01-01T00:00:03Z", 125, 225));
     let next = poll("a");
-    assert!(next.contains("Latest 125 tok/s"), "{next}");
+    assert!(rate(&next).is_some_and(|n| n > previous * 1.9), "{next}");
     assert!(!poll("another").contains("tok/s"));
     write_event(
         json!({"type":"event_msg","payload":{"type":"task_complete","turn_id":"t","duration_ms":10000}}),
@@ -776,12 +791,12 @@ fn active_turn_speed_uses_confirmed_turn_tokens_and_moves_between_reports() {
     let rate = |state: Value| {
         let tree = rendered(home.path(), state, "");
         let text = common::plain(&tree);
-        text.split("Turn ")
+        text.split("Turn est. ")
             .nth(1)
             .and_then(|s| s.split_whitespace().next()?.parse::<f64>().ok())
     };
     observations(&path, &events);
-    assert_eq!(rate(state("a", "thinking", 9000)), None);
+    assert_eq!(rate(state("a", "thinking", 9000)), Some(0.0));
     events.extend([
         report("one", 1000, 10000),
         report("other", 9000, 92000),
@@ -804,7 +819,7 @@ fn active_turn_speed_uses_confirmed_turn_tokens_and_moves_between_reports() {
     assert_eq!(rate(state("a", "working", 10000)), None);
     events.push(json!({"type":"event_msg","payload":{"type":"task_started","turn_id":"two","started_at":started+2}}));
     observations(&path, &events);
-    assert_eq!(rate(state("a", "working", 10000)), None);
+    assert_eq!(rate(state("a", "working", 10000)), Some(0.0));
     events.push(report("two", 50, 10050));
     observations(&path, &events);
     assert!(rate(state("a", "thinking", 10050)).is_some_and(|r| r > 0. && r < 9.));
@@ -851,7 +866,7 @@ fn visible_output_updates_turn_speed_before_the_first_usage_report() {
             .nth(1)
             .and_then(|s| s.split_whitespace().next()?.parse::<f64>().ok())
     };
-    assert_eq!(rate(&read(&events, 0)), None);
+    assert_eq!(rate(&read(&events, 0)), Some(0.0));
     events.extend([talk.clone(), talk.clone()]);
     let a = read(&events, 0);
     assert!(rate(&a).is_some_and(|n| (8.5..=10.1).contains(&n)), "{a}");
@@ -860,7 +875,7 @@ fn visible_output_updates_turn_speed_before_the_first_usage_report() {
     assert!(rate(&b).is_some_and(|n| (17.0..=20.1).contains(&n)), "{b}");
     let native = read(&events, 600);
     assert!(
-        native.contains("Turn ") && !native.contains("est."),
+        rate(&native).is_some_and(|r| (25.0..=30.1).contains(&r)),
         "{native}"
     );
     let stamp = Connection::open_in_memory()
@@ -875,7 +890,7 @@ fn visible_output_updates_turn_speed_before_the_first_usage_report() {
     events.push(talk);
     let exact = read(&events, 800);
     assert!(
-        exact.contains("Turn ") && !exact.contains("est."),
+        rate(&exact).is_some_and(|r| (35.0..=40.1).contains(&r)),
         "{exact}"
     );
     events.push(message("a2", "t", at + 4000));
@@ -904,7 +919,7 @@ fn a_large_active_chat_recovers_the_matching_turn_clock_on_the_first_read() {
     );
     let read = || {
         let row = common::plain(&rendered(home.path(), state.clone(), ""));
-        row.split("Turn ")
+        row.split("Turn est. ")
             .nth(1)
             .and_then(|s| s.split_whitespace().next()?.parse::<f64>().ok())
     };
@@ -1259,7 +1274,7 @@ fn turn_speed_only_subtracts_totals_from_the_same_counter() {
         );
         let row = common::plain(&rendered(home.path(), state.clone(), ""));
         let rate = row
-            .split("Turn ")
+            .split("Turn est. ")
             .nth(1)
             .unwrap()
             .split_whitespace()

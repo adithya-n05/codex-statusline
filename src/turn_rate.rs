@@ -196,19 +196,14 @@ impl TurnRate {
             seconds.checked_mul(1000)
         });
     }
-    pub fn label(
-        &self,
-        thread: &Value,
-        now_ms: i64,
-        latest_tool: Option<&crate::speed::ToolMeasurement>,
-    ) -> Option<String> {
+    pub fn label(&self, thread: &Value, now_ms: i64, last: Option<&str>) -> Option<String> {
         if self.finished
             || !matches!(
-                thread.pointer("/agent/state")?.as_str()?,
-                "working" | "thinking" | "waiting"
+                thread.pointer("/agent/state").and_then(Value::as_str),
+                Some("working" | "thinking" | "waiting")
             )
         {
-            return None;
+            return last.map(str::to_owned);
         }
         let elapsed = now_ms.checked_sub(self.started_ms?)?;
         let native = thread
@@ -230,19 +225,10 @@ impl TurnRate {
                 .sum::<u64>()
                 .div_ceil(4)
         };
-        if estimated == 0
-            && native <= self.confirmed
-            && let Some(sample) = latest_tool
-            && Some(sample.turn.as_str()) == self.id.as_deref()
-            && self.report_ms.is_none_or(|report| sample.at >= report)
-        {
-            return Some(format!("Latest {:.0} tok/s", sample.rate));
-        }
         let tokens = self.confirmed.max(native).saturating_add(estimated);
-        let label = if estimated > 0 { "Turn est." } else { "Turn" };
-        (tokens > 0 && elapsed > 0).then(|| {
+        (elapsed > 0).then(|| {
             format!(
-                "{label} {:.1} tok/s",
+                "Turn est. {:.1} tok/s",
                 tokens as f64 * 1000. / elapsed as f64
             )
         })

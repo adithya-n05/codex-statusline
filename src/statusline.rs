@@ -145,17 +145,14 @@ pub fn render_enriched(
     }
     crate::layout::paint_gauge_labels(&mut weekly);
     middle.extend(weekly);
-    let turn_rate = extra.history.turn_rate.label(
-        &state["thread"],
-        now_ms,
-        extra.history.responses.latest_tool.as_ref(),
-    );
+    let turn_rate =
+        extra
+            .history
+            .turn_rate
+            .label(&state["thread"], now_ms, extra.history.speed.as_deref());
     for (label, color) in [
         (identity.label(), "#E78A53"),
-        (
-            turn_rate.as_deref().or(extra.history.speed.as_deref()),
-            "#FBCB97",
-        ),
+        (turn_rate.as_deref(), "#FBCB97"),
     ] {
         let Some(label) = label else { continue };
         if !middle.is_empty() {
