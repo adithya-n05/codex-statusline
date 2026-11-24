@@ -1,5 +1,5 @@
 use codex_statusline::protocol;
-use serde_json::{Value, json};
+use codex_statusline::statusline;
 
 use std::{env, io, process::ExitCode};
 
@@ -7,13 +7,7 @@ fn main() -> io::Result<ExitCode> {
     let mut args = env::args_os().skip(1);
     match (args.next(), args.next()) {
         (None, None) => {
-            protocol::serve(io::stdin().lock(), io::stdout().lock(), |state| {
-                json!(
-                    state
-                        .pointer("/thread/workspace/cwd")
-                        .and_then(Value::as_str)
-                )
-            })?;
+            protocol::serve(io::stdin().lock(), io::stdout().lock(), statusline::render)?;
             Ok(ExitCode::SUCCESS)
         }
         (Some(flag), None) if flag == "--version" => {
