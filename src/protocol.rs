@@ -34,6 +34,17 @@ pub fn serve(reader: impl BufRead, mut writer: impl Write) -> io::Result<()> {
                     "resources/templates/list" => {
                         json!({"jsonrpc":"2.0","id":id,"result":{"resourceTemplates":[]}})
                     }
+                    "resources/read" if request["params"]["uri"] == URI => {
+                        let state =
+                            &request["params"]["_meta"]["com.openai/codex-statusline-state"];
+                        let tree = json!(
+                            state
+                                .pointer("/thread/workspace/cwd")
+                                .and_then(Value::as_str)
+                        );
+                        json!({"jsonrpc":"2.0","id":id,"result":{"contents":[{"uri":URI,"mimeType":"application/json","text":tree.to_string()}]}})
+                    }
+                    "resources/read" => error(id.clone(), -32602, "Unexpected resource URI"),
                     _ => error(id.clone(), -32601, "Unknown method"),
                 }
             }

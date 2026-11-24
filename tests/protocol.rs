@@ -59,3 +59,37 @@ fn inventory_advertises_one_matching_statusline_resource() {
     assert_eq!(resource["mimeType"], "application/json");
     assert_eq!(replies[2]["result"]["resourceTemplates"], json!([]));
 }
+fn read_request(id: i32, uri: &str, state: Value) -> String {
+    json!({"id":id,"method":"resources/read","params":{"uri":uri,"_meta":{"com.openai/codex-statusline-state":state}}}).to_string()
+}
+
+#[test]
+fn reads_the_displayed_workspace_on_every_resource_request() {
+    let uri = "ui://codex-statusline/footer";
+    let paths = ["/a/alpha", "/b/日本", "/a/alpha"];
+    let mut requests: Vec<_> = paths
+        .iter()
+        .enumerate()
+        .map(|(index, path)| {
+            read_request(
+                index as i32,
+                uri,
+                json!({"thread":{"workspace":{"cwd":path}}}),
+            )
+        })
+        .collect();
+    requests.push(read_request(3, uri, json!({})));
+    requests.push(read_request(4, "ui://other/resource", json!({})));
+    let replies = exchange(&requests.iter().map(String::as_str).collect::<Vec<_>>());
+    for (message, path) in replies.iter().zip(paths) {
+        let resource = &message["result"]["contents"][0];
+        assert_eq!(resource["uri"], uri);
+        assert_eq!(resource["mimeType"], "application/json");
+        assert_eq!(
+            serde_json::from_str::<Value>(resource["text"].as_str().unwrap()).unwrap(),
+            json!(path)
+        );
+    }
+    assert_eq!(replies[3]["result"]["contents"][0]["text"], "null");
+    assert_eq!(replies[4]["error"]["code"], -32602);
+}
