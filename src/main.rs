@@ -79,10 +79,11 @@ fn main() -> io::Result<ExitCode> {
             protocol::serve(io::stdin().lock(), io::stdout().lock(), |s| {
                 let mut extra = worker.latest(s);
                 let t = &s["thread"];
-                if extra.compaction.is_none()
-                    && t.pointer("/usage/context/used_percentage")
-                        .is_none_or(|v| v.is_null())
-                {
+                let native_context_missing = t
+                    .pointer("/usage/context/used_percentage")
+                    .is_none_or(|v| v.is_null());
+                let awaiting_worker = extra.history.tools_label().is_none();
+                if awaiting_worker || (extra.compaction.is_none() && native_context_missing) {
                     let key = (
                         t["id"].clone(),
                         t["model"]["id"].clone(),
@@ -92,25 +93,20 @@ fn main() -> io::Result<ExitCode> {
                         let sample = local_home
                             .as_deref()
                             .and_then(|h| codex_statusline::compaction::Sample::load(h, t));
-                        let recorded = if sample.is_none() {
-                            local_home
-                                .as_deref()
-                                .zip(t["id"].as_str())
-                                .and_then(|(h, id)| codex_statusline::storage::rollout(h, id))
-                                .and_then(|p| {
-                                    codex_statusline::saved_context::SavedContext::tail(&p)
-                                })
-                        } else {
-                            None
-                        };
-                        startup_sample = Some((key, sample, recorded));
+                        let recent = local_home
+                            .as_deref()
+                            .zip(t["id"].as_str())
+                            .and_then(|(h, id)| codex_statusline::storage::rollout(h, id))
+                            .and_then(|p| codex_statusline::history::recent(&p));
+                        startup_sample = Some((key, sample, recent));
                     }
-                    if let Some((_, sample, recorded)) = &startup_sample {
-                        extra.compaction = sample.clone();
-                        if extra.history.tools_label().is_none()
-                            && let Some(recorded) = recorded
-                        {
-                            extra.history.context = recorded.clone();
+                    if let Some((_, sample, recent)) = &startup_sample {
+                        if extra.compaction.is_none() {
+                            extra.compaction = sample.clone();
+                        }
+                        if awaiting_worker && let Some(recent) = recent {
+                            extra.history.context = recent.context.clone();
+                            extra.history.speed = recent.speed.clone();
                         }
                     }
                 }

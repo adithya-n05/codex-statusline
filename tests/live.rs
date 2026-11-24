@@ -505,3 +505,30 @@ fn a_resumed_chat_recovers_recorded_usage_after_diagnostic_logs_rotate() {
     writeln!(f, "{model}\n{usage}").unwrap();
     assert!(read("test-model", json!({})).contains("Context 50% used"));
 }
+#[test]
+fn the_first_footer_read_restores_speed_from_a_recent_response_in_a_large_chat() {
+    let home = tempfile::tempdir().unwrap();
+    let path = index(home.path());
+    let mut f = fs::File::create(&path).unwrap();
+    writeln!(f, "{}", "x".repeat(600000)).unwrap();
+    for p in [
+        json!({"type":"item_completed","turn_id":"older","started_at_ms":1735689600000u64,"item":{"type":"Reasoning"}}),
+        json!({"type":"token_count","info":{"total_token_usage":{"output_tokens":100500},"last_token_usage":{"output_tokens":500}}}),
+        json!({"type":"task_complete","turn_id":"older","duration_ms":210000}),
+    ] {
+        writeln!(
+            f,
+            "{}",
+            json!({"type":"event_msg","timestamp":"2025-01-01T00:00:05Z","payload":p})
+        )
+        .unwrap();
+    }
+    let first = rendered(
+        home.path(),
+        json!({"thread":{"id":"a","usage":{"context":{"used_percentage":52}}}}),
+        "",
+    );
+    assert!(first.to_string().contains("Last 100 tok/s"), "{first}");
+    let absent = rendered(home.path(), json!({"thread":{"id":"different"}}), "");
+    assert!(!absent.to_string().contains("Last 100"));
+}

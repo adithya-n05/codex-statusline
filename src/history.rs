@@ -137,3 +137,26 @@ impl Metrics {
         self.available.then(|| self.activity.label())
     }
 }
+/// Read a bounded suffix on startup while the worker reconstructs complete thread metrics.
+pub fn recent(path: &Path) -> Option<Metrics> {
+    let mut file = File::open(path).ok()?;
+    const BYTES: u64 = 512 * 1024;
+    let length = file.metadata().ok()?.len();
+    let offset = length.saturating_sub(BYTES);
+    file.seek(SeekFrom::Start(offset)).ok()?;
+    let mut lines = BufReader::new(file.take(length - offset)).split(b'\n');
+    if offset > 0 {
+        lines.next();
+    }
+    let mut result = Metrics::default();
+    let mut turns = crate::speed::Turns::recent(offset > 0);
+    for bytes in lines {
+        if let Ok(event) = serde_json::from_slice::<Value>(&bytes.ok()?) {
+            result.context.observe(&event);
+            if event["type"] == "event_msg" {
+                turns.observe(&event, &mut result.speed);
+            }
+        }
+    }
+    Some(result)
+}

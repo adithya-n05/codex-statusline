@@ -1,9 +1,4 @@
 use serde_json::Value;
-use std::{
-    fs::File,
-    io::{BufRead, BufReader, Seek, SeekFrom},
-    path::Path,
-};
 #[derive(Default, Clone)]
 pub struct SavedContext {
     model: String,
@@ -55,21 +50,5 @@ impl SavedContext {
             return None;
         }
         Some(crate::usage::restore(live, window, Some(used)))
-    }
-    pub fn tail(path: &Path) -> Option<Self> {
-        let mut file = File::open(path).ok()?;
-        let offset = file.metadata().ok()?.len().saturating_sub(512 * 1024);
-        file.seek(SeekFrom::Start(offset)).ok()?;
-        let mut lines = BufReader::new(file).split(b'\n');
-        if offset > 0 {
-            lines.next();
-        }
-        let mut result = Self::default();
-        for bytes in lines {
-            if let Ok(event) = serde_json::from_slice(&bytes.ok()?) {
-                result.observe(&event);
-            }
-        }
-        Some(result)
     }
 }

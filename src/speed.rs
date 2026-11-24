@@ -3,6 +3,7 @@ use serde_json::Value;
 #[derive(Default)]
 pub struct Turns {
     cumulative: u64,
+    partial: bool,
     active: Option<(String, u64)>,
     observed: bool,
     output_started_ms: Option<i64>,
@@ -10,9 +11,20 @@ pub struct Turns {
 }
 
 impl Turns {
+    pub fn recent(partial: bool) -> Self {
+        Self {
+            partial,
+            ..Default::default()
+        }
+    }
     pub fn observe(&mut self, event: &Value, last: &mut Option<String>) {
         let timestamp = &event["timestamp"];
         let event = &event["payload"];
+        if self.partial && self.active.is_none() && event["type"] == "item_completed" {
+            self.active = event["turn_id"]
+                .as_str()
+                .map(|id| (id.to_owned(), self.cumulative));
+        }
         match event["type"].as_str() {
             Some("task_started") => {
                 self.active = event["turn_id"]
@@ -79,7 +91,7 @@ impl Turns {
                     .cumulative
                     .checked_sub(start)
                     .zip(event["duration_ms"].as_u64())
-                    .filter(|(_, ms)| *ms > 0 && self.observed)
+                    .filter(|(_, ms)| *ms > 0 && self.observed && !self.partial)
                     .map(|(n, ms)| format!("Last {:.0} tok/s", n as f64 * 1000. / ms as f64));
             }
             _ => {}
