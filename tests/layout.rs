@@ -54,7 +54,7 @@ fn twenty_cell_bar_uses_bathory_colors_and_clamps_bounds() {
         let text = result["children"][0].as_str().unwrap();
         assert_eq!(
             text,
-            format!("[{}{}]", "█".repeat(blocks), "░".repeat(20 - blocks))
+            format!("[{}{}]", "▮".repeat(blocks), "·".repeat(20 - blocks))
         );
     }
 }
@@ -85,4 +85,21 @@ fn rows_that_fit_exactly_keep_their_last_grapheme() {
     }
     let text = format!("{}e\u{301}", "a".repeat(8189));
     assert_eq!(fixed_line(&text), text);
+}
+#[test]
+fn partial_gauges_keep_a_visible_filled_cell_and_a_visible_empty_cell() {
+    for (pct, lit) in [
+        (0., 0),
+        (0.1, 1),
+        (2., 1),
+        (96., 19),
+        (99.9, 19),
+        (100., 20),
+    ] {
+        let bar = codex_statusline::layout::gauge(pct, 100. - pct);
+        assert_eq!(
+            bar["children"][0],
+            format!("[{}{}]", "▮".repeat(lit), "·".repeat(20 - lit))
+        );
+    }
 }

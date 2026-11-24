@@ -116,7 +116,7 @@ fn weekly_allowance_decreases_and_counts_down_to_the_reported_reset() {
     let tree = weekly(&account, 10000);
     assert_eq!(
         tree.iter().map(plain).collect::<String>(),
-        "7D 70% left [██████████████░░░░░░] · reset 2d 1h"
+        "7D 70% left [▮▮▮▮▮▮▮▮▮▮▮▮▮▮······] · reset 2d 1h"
     );
     assert!(weekly(&json!({}), 0).is_empty());
     assert!(
