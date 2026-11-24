@@ -112,7 +112,7 @@ fn weekly_allowance_decreases_and_counts_down_to_the_reported_reset() {
     let tree = weekly(&account, 10000);
     assert_eq!(
         tree.iter().map(plain).collect::<String>(),
-        "7D 70% left [██████████████░░░░░░] · reset 2d 1h"
+        "WKLY 70% left [██████████████░░░░░░] · reset 2d 1h"
     );
     assert!(weekly(&json!({}), 0).is_empty());
     assert!(
@@ -134,7 +134,7 @@ fn weekly_allowance_decreases_and_counts_down_to_the_reported_reset() {
         x.iter()
             .map(plain)
             .collect::<String>()
-            .starts_with("7D 0% left")
+            .starts_with("WKLY 0% left")
     );
 }
 #[test]
@@ -226,7 +226,7 @@ fn context_and_empty_weekly_bars_share_their_labels_foreground() {
         [
             ("CTX 25% used ", "#5F8787"),
             ("[█████░░░░░░░░░░░░░░░]", "#5F8787"),
-            ("7D 0% left ", "#E05252"),
+            ("WKLY 0% left ", "#E05252"),
             ("[░░░░░░░░░░░░░░░░░░░░]", "#E05252"),
         ]
     );

@@ -74,13 +74,13 @@ fn main() {
 fn native_footer_geometry() {
     let mut tty = terminal::Terminal::start(
         100,
-        ["Directory · title", "CTX 50% · 7D 70%", "Tools · CLI"],
+        ["Directory · title", "CTX 50% · WKLY 70%", "Tools · CLI"],
     );
     tty.wait(
         |lines| {
             lines.windows(3).any(|rows| {
                 rows[0].trim() == "Directory · title"
-                    && rows[1].trim() == "CTX 50% · 7D 70%"
+                    && rows[1].trim() == "CTX 50% · WKLY 70%"
                     && rows[2].trim() == "Tools · CLI"
             })
         },
@@ -118,7 +118,7 @@ fn outer_rows_clip_after_resize() {
     );
 }
 fn usage_wraps_only_in_the_narrow_pane() {
-    let middle = "CTX [██████████░░░░░░░░░░] 50% / 258k · 7D 70% left · ChatGPT · Last 81 tok/s";
+    let middle = "CTX [██████████░░░░░░░░░░] 50% / 258k · WKLY 70% left · ChatGPT · Last 81 tok/s";
     let mut tty = terminal::Terminal::start(160, ["Project dir", middle, "Tools · CLI"]);
     tty.wait(
         |l| l.iter().any(|s| s.contains(middle)),

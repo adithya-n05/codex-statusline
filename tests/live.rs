@@ -248,7 +248,7 @@ fn spent_credits_replace_the_weekly_gauge_until_that_same_reset() {
     };
     observations(&path, &[at(0, "60000"), at(48000, "62000")]);
     let state = credit_state(reset);
-    assert!(run(state.clone()).contains("7D 18% left"));
+    assert!(run(state.clone()).contains("WKLY 18% left"));
     // A balance observed in a separate launch arrives in a different order.
     observations(&path, &[at(100000, "31000"), at(60000, "46500")]);
     let usage = run(state.clone());
@@ -256,13 +256,13 @@ fn spent_credits_replace_the_weekly_gauge_until_that_same_reset() {
         usage.contains("CRDTS 31,000 / 62,000 · 50% left [██████████░░░░░░░░░░] · reset"),
         "{usage}"
     );
-    assert!(!usage.contains("7D ") && !usage.contains('≈'));
+    assert!(!usage.contains("WKLY ") && !usage.contains('≈'));
     observations(&path, &[at(105000, "33000")]);
     assert!(run(state.clone()).contains("CRDTS 33,000 / 64,000"));
     observations(&path, &[at(106000, "0")]);
     assert!(run(state.clone()).contains("CRDTS 0 / 64,000 · 0% left"));
-    assert!(run(credit_state(reset + 604800)).contains("7D 18% left"));
-    assert!(run(credit_state(now - 1)).contains("7D 18% left"));
+    assert!(run(credit_state(reset + 604800)).contains("WKLY 18% left"));
+    assert!(run(credit_state(now - 1)).contains("WKLY 18% left"));
     account(home.path(), "second-account");
     assert!(!run(state).contains("CRDTS"));
 }
@@ -316,7 +316,7 @@ fn alternating_reset_seconds_keep_the_same_credit_balance_and_weekly_baseline() 
         state["account"]["rate_limits"][0]["primary_limit"]["used_percent"] = json!(100);
         let row = rendered(home.path(), state, "Tools").to_string();
         assert!(row.contains("CRDTS 60,000 / 62,000"), "{row}");
-        assert!(!row.contains("7D 0% left"));
+        assert!(!row.contains("WKLY 0% left"));
     }
     assert!(
         !rendered(home.path(), credit_state(reset + 604800), "Tools")

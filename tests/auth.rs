@@ -30,7 +30,7 @@ fn authenticates_from_the_local_mode_without_disclosing_secrets() {
             assert!(body.contains(label));
         }
         if expected == Some("API key") {
-            assert!(!body.contains("7D "));
+            assert!(!body.contains("WKLY "));
         }
         assert!(!body.contains("secret"));
         std::fs::remove_file(path).unwrap();

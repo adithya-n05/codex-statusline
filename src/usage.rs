@@ -57,7 +57,7 @@ pub fn weekly(account: &Value, now: i64) -> Vec<Value> {
         .unwrap_or_default()
         .clamp(0., 100.);
     let left = 100. - used;
-    let mut line = vec![json!(format!("7D {left:.0}% left ")), gauge(left, used)];
+    let mut line = vec![json!(format!("WKLY {left:.0}% left ")), gauge(left, used)];
     if let Some(reset) = w["resets_at"].as_i64() {
         line.push(json!(format!(
             " · reset {}",
