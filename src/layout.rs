@@ -10,7 +10,18 @@ pub fn fixed_line(input: &str) -> String {
     let mut after_hyphen = false;
     for (offset, cluster) in text.grapheme_indices(true) {
         while breaks.next_if(|next| *next < offset).is_some() {}
-        if after_hyphen || breaks.peek() == Some(&offset) {
+        let join = after_hyphen || breaks.peek() == Some(&offset);
+        let extra = usize::from(join) * '\u{2060}'.len_utf8() + cluster.len();
+        let reserve = if offset + cluster.len() == text.len() {
+            0
+        } else {
+            '…'.len_utf8()
+        };
+        if out.len() + extra + reserve > 8192 {
+            out.push('…');
+            break;
+        }
+        if join {
             out.push('\u{2060}');
         }
         out.push_str(cluster);

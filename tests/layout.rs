@@ -58,3 +58,22 @@ fn twenty_cell_bar_uses_bathory_colors_and_clamps_bounds() {
         );
     }
 }
+#[test]
+fn long_outer_rows_stay_within_the_resource_budget_at_a_grapheme_boundary() {
+    let family = "👩‍👩‍👧‍👦";
+    for input in [
+        "a".repeat(30000),
+        family.repeat(5000),
+        format!("a{}", "\u{301}".repeat(9000)),
+    ] {
+        let result = fixed_line(&input);
+        assert!(result.len() <= 8192);
+        let text = visible(&result);
+        let prefix = text.strip_suffix('…').unwrap();
+        assert!(input.starts_with(prefix));
+        if input.starts_with(family) {
+            assert_eq!(prefix.len() % family.len(), 0);
+        }
+    }
+    assert_eq!(fixed_line(&"a".repeat(8192)).len(), 8192);
+}
