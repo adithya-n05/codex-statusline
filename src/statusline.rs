@@ -72,7 +72,10 @@ pub fn render_enriched(
         middle.push(serde_json::json!(" · "));
     }
     middle.extend(weekly);
-    if let Some(label) = identity.label() {
+    for label in [identity.label(), extra.history.speed.as_deref()]
+        .into_iter()
+        .flatten()
+    {
         if !middle.is_empty() {
             middle.push(serde_json::json!(" · "));
         }

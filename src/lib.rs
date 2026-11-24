@@ -5,6 +5,7 @@ pub mod history;
 pub mod layout;
 pub mod protocol;
 pub mod runtime;
+mod speed;
 pub mod statusline;
 pub mod storage;
 pub mod usage;

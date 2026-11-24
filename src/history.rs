@@ -9,6 +9,7 @@ use std::{
 #[derive(Clone, Default)]
 pub struct Metrics {
     pub plan: Option<String>,
+    pub speed: Option<String>,
     available: bool,
     activity: crate::activity::Activity,
 }
@@ -47,6 +48,7 @@ struct Cursor {
     file_id: u64,
     offset: u64,
     metrics: Metrics,
+    turns: crate::speed::Turns,
     seen: std::collections::HashSet<String>,
 }
 #[derive(Default)]
@@ -116,6 +118,11 @@ impl History {
                         .metrics
                         .activity
                         .record(&event["payload"]["item"], &mut cursor.seen);
+                }
+                if event["type"] == "event_msg" {
+                    cursor
+                        .turns
+                        .observe(&event["payload"], &mut cursor.metrics.speed);
                 }
                 cursor.metrics.observe(&value);
             }
