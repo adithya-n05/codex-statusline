@@ -125,14 +125,20 @@ args = {}
             json!(arguments)
         );
         fs::write(home.join("config.toml"), config).unwrap();
-        Self::launch(width, std::sync::Arc::new(root), false)
+        Self::launch(width, std::sync::Arc::new(root), None)
     }
-    pub fn resume(self, width: u16) -> Self {
+    pub fn resume(self, width: u16, selector: &str) -> Self {
         let root = self.root.clone();
         drop(self);
-        Self::launch(width, root, true)
+        Self::launch(width, root, Some(selector))
     }
-    fn launch(width: u16, root: std::sync::Arc<TempDir>, resume: bool) -> Self {
+    pub fn saved_thread_id(&self) -> String {
+        let db =
+            codex_statusline::storage::open(&self.root.path().join("codex"), "state_").unwrap();
+        db.query_row("SELECT id FROM threads", [], |row| row.get(0))
+            .unwrap()
+    }
+    fn launch(width: u16, root: std::sync::Arc<TempDir>, resume: Option<&str>) -> Self {
         let base = root.path().canonicalize().unwrap();
         let home = base.join("codex");
         let cwd = base.join("work");
@@ -148,8 +154,8 @@ args = {}
         cmd.env("XDG_CACHE_HOME", base.join("cache"));
         cmd.args(["--no-daemon", "-C"]);
         cmd.arg(&cwd);
-        if resume {
-            cmd.args(["resume", "--last"]);
+        if let Some(selector) = resume {
+            cmd.args(["resume", selector]);
         }
         cmd.cwd(&cwd);
         let pty = native_pty_system()

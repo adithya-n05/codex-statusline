@@ -58,6 +58,10 @@ fn main() {
                 installed_provider_populates_a_fresh_chat();
                 Ok(())
             }),
+            Trial::test("idle_resume_shows_saved_tools_before_input", || {
+                idle_resume_shows_saved_tools_before_input();
+                Ok(())
+            }),
             Trial::test("native_footer_geometry", || {
                 native_footer_geometry();
                 Ok(())
@@ -160,6 +164,29 @@ fn installed_provider_populates_a_fresh_chat() {
         "real provider rendering in a fresh Codex chat",
     );
 }
+fn idle_resume_shows_saved_tools_before_input() {
+    let mut original = terminal::Terminal::start_provider(180);
+    original.wait(
+        |rows| rows.iter().any(|r| r.contains("API key")),
+        "fresh chat ready to save",
+    );
+    original.send(b"!pwd\r");
+    let saved_tools = |row: &str| row.trim_start().starts_with("Tools 1 · Shell 1 · CLI ");
+    original.wait(
+        |rows| rows.iter().any(|r| saved_tools(r)),
+        "one recorded shell request",
+    );
+    let id = original.saved_thread_id();
+    let mut resumed = original.resume(180, &id);
+    resumed.wait(
+        |rows| {
+            rows.windows(3)
+                .any(|r| r[1].contains("API key") && saved_tools(&r[2]) && r[2].ends_with(&id))
+        },
+        "same saved shell count and thread on idle resume",
+    );
+}
+
 fn standard_shortcuts_work_on_start_and_resume() {
     fn exercise(t: &mut terminal::Terminal) {
         let hints = |lines: &[String]| {
@@ -190,7 +217,7 @@ fn standard_shortcuts_work_on_start_and_resume() {
         "provider ready before saving the fixture",
     );
     original.persist();
-    let mut resumed = original.resume(180);
+    let mut resumed = original.resume(180, "--last");
     exercise(&mut resumed);
 }
 fn exact_fit_usage_has_no_ellipsis_and_real_overflow_does() {

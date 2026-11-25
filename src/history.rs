@@ -13,8 +13,19 @@ pub struct Metrics {
     pub speed: Option<String>,
     pub(crate) responses: crate::speed::Turns,
     pub(crate) turn_rate: crate::turn_rate::TurnRate,
-    tool_position: Option<(u64, u64)>,
+    tool_position: ToolPosition,
     activity: crate::activity::Activity,
+}
+
+#[derive(Clone, Copy, Default)]
+enum ToolPosition {
+    #[default]
+    Unread,
+    AwaitingFullScan,
+    Counted {
+        file_id: u64,
+        end: u64,
+    },
 }
 
 impl Metrics {
@@ -139,7 +150,10 @@ impl History {
                 cursor.metrics.observe(&value);
             }
         }
-        cursor.metrics.tool_position = Some((file_id, cursor.offset));
+        cursor.metrics.tool_position = ToolPosition::Counted {
+            file_id,
+            end: cursor.offset,
+        };
         self.files.push_front((path.into(), cursor));
         self.files.truncate(8);
         self.files.front().map(|(_, cursor)| &cursor.metrics)
@@ -155,7 +169,11 @@ impl Metrics {
         }
     }
     pub fn tools_label(&self) -> Option<String> {
-        self.tool_position.map(|_| self.activity.label())
+        match self.tool_position {
+            ToolPosition::Unread => None,
+            ToolPosition::AwaitingFullScan => Some("Tools …".to_owned()),
+            ToolPosition::Counted { .. } => Some(self.activity.label()),
+        }
     }
 }
 /// Read the latest measurements independently of the background Git and activity scan.
@@ -169,20 +187,27 @@ impl RecentHistory {
     pub fn update_tools(&self, history: &mut Metrics) {
         let tail = &self.tool_tail;
         let offset = match history.tool_position {
-            Some((id, end)) if id == tail.file_id && end <= tail.end => end,
+            ToolPosition::Counted { file_id, end }
+                if file_id == tail.file_id && end <= tail.end =>
+            {
+                end
+            }
             _ => {
                 history.activity = Default::default();
-                history.tool_position = None;
                 0
             }
         };
         if offset < tail.start {
+            history.tool_position = ToolPosition::AwaitingFullScan;
             return;
         }
         for (_, call) in tail.calls.iter().filter(|(end, _)| *end > offset) {
             history.activity.record(call);
         }
-        history.tool_position = Some((tail.file_id, tail.end));
+        history.tool_position = ToolPosition::Counted {
+            file_id: tail.file_id,
+            end: tail.end,
+        };
     }
     pub fn read(&mut self, path: &Path) -> Option<&Metrics> {
         self.read_with(path, |_| {})
@@ -202,8 +227,10 @@ impl RecentHistory {
         let modified = metadata.modified().ok();
         let id = file_id(&metadata);
         let base = baseline.and_then(|m| {
-            let (original, end) = m.tool_position?;
-            (length > TAIL_BYTES && original == id && (length - TAIL_BYTES..=length).contains(&end))
+            let ToolPosition::Counted { file_id, end } = m.tool_position else {
+                return None;
+            };
+            (length > TAIL_BYTES && file_id == id && (length - TAIL_BYTES..=length).contains(&end))
                 .then_some((end, m))
         });
         let baseline_offset = base.map(|(end, _)| end);

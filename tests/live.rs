@@ -56,6 +56,51 @@ fn index(home: &std::path::Path) -> std::path::PathBuf {
     .unwrap();
     path
 }
+
+#[test]
+fn idle_resume_reports_saved_tools_without_a_false_zero_while_scanning() {
+    for padding in [0, 600_000] {
+        let home = tempfile::tempdir().unwrap();
+        let path = index(home.path());
+        let shell = |id| json!({"type":"item_started","item":{"id":id,"type":"CommandExecution"}});
+        write_events(
+            &path,
+            &[
+                shell("first"),
+                json!({"type":"padding","text":" ".repeat(padding)}),
+                shell("first"),
+                shell("second"),
+            ],
+        );
+        let mut provider = provider::Provider::open(home.path());
+        let state = json!({"thread":{"id":"a","agent":{"state":"ready"}}});
+        let deadline = Instant::now() + Duration::from_secs(4);
+        loop {
+            let footer = provider.poll(&state);
+            let row = footer.lines().nth(2).unwrap();
+            if row == "Tools 2 · Shell 2 · a" {
+                break;
+            }
+            assert_eq!(padding, 600_000, "short histories fit in the first read");
+            assert_eq!(row, "Tools … · a", "partial history cannot supply a total");
+            assert!(
+                Instant::now() < deadline,
+                "idle resume never restored the counts"
+            );
+            thread::sleep(Duration::from_millis(15));
+        }
+        assert_eq!(
+            provider.poll(&state).lines().nth(2),
+            Some("Tools 2 · Shell 2 · a")
+        );
+        let fresh = json!({"thread":{"id":"different","agent":{"state":"ready"}}});
+        assert_eq!(
+            provider.poll(&fresh).lines().nth(2),
+            Some("Tools 0 · different")
+        );
+    }
+}
+
 #[test]
 fn last_turn_speed_uses_completed_output_and_closes_the_usage_row() {
     let home = tempfile::tempdir().unwrap();
