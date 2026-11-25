@@ -93,7 +93,7 @@ pub fn render_enriched(
         .map(|v| format!("CLI {v}"));
     let tools = extra.history.tools_label();
     let last = [
-        tools.as_deref(),
+        Some(tools.as_deref().unwrap_or("Tools 0")),
         version.as_deref(),
         thread.get("id").and_then(Value::as_str),
     ]

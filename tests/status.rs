@@ -59,7 +59,7 @@ fn metadata_closes_the_third_row_and_follows_the_displayed_session() {
         let footer = plain(&render(&state));
         assert_eq!(
             footer.split('\n').nth(2),
-            Some(format!("CLI 1.2.3 · {id}").as_str())
+            Some(format!("Tools 0 · CLI 1.2.3 · {id}").as_str())
         );
     }
 }
@@ -311,6 +311,6 @@ fn field_dividers_have_one_foreground_across_all_three_rows_and_account_modes() 
         let tree = render_enriched(&state, &account, &extra);
         let mut counts = vec![0];
         check(&tree, "", &mut counts);
-        assert_eq!(counts, [3, 4, 1]);
+        assert_eq!(counts, [3, 4, 2]);
     }
 }

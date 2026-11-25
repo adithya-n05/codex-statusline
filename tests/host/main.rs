@@ -154,7 +154,7 @@ fn installed_provider_populates_a_fresh_chat() {
                 r[0].contains("work")
                     && r[0].contains("Approvals")
                     && r[1].contains("API key")
-                    && r[2].contains("CLI ")
+                    && r[2].trim_start().starts_with("Tools 0 · CLI ")
             })
         },
         "real provider rendering in a fresh Codex chat",
